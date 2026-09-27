@@ -118,7 +118,7 @@ do
 	title.Size = UDim2.new(1, -20, 0, 30)
 	title.Position = UDim2.new(0, 10, 0, 20)
 	title.BackgroundTransparency = 1
-	title.Text = "f4xi hub v5"
+	title.Text = "f4xi hub v1.0"
 	title.TextColor3 = Color3.fromRGB(130, 80, 255)
 	title.Font = Enum.Font.GothamBold
 	title.TextSize = 20
@@ -227,21 +227,21 @@ local SoundService = game:GetService("SoundService")
 local TWEEN_FAST = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local TWEEN_MED  = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local TWEEN_SLOW = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local BG         = Color3.fromRGB(8, 8, 16)
-local BG_CARD    = Color3.fromRGB(16, 16, 28)
-local BG_HOVER   = Color3.fromRGB(24, 24, 42)
-local BORDER     = Color3.fromRGB(35, 35, 60)
+local BG         = Color3.fromRGB(10, 8, 20)
+local BG_CARD    = Color3.fromRGB(22, 17, 36)
+local BG_HOVER   = Color3.fromRGB(33, 24, 54)
+local BORDER     = Color3.fromRGB(48, 36, 78)
 local WHITE      = Color3.new(1, 1, 1)
-local DIM        = Color3.fromRGB(130, 130, 155)
-local ACCENT     = Color3.fromRGB(130, 80, 255)
-local ACCENT2    = Color3.fromRGB(80, 180, 255)
-local ACCENT_DIM = Color3.fromRGB(80, 50, 160)
-local TRACK_OFF  = Color3.fromRGB(35, 35, 55)
-local TRACK_ON   = Color3.fromRGB(130, 80, 255)
+local DIM        = Color3.fromRGB(150, 140, 180)
+local ACCENT     = Color3.fromRGB(150, 90, 255)
+local ACCENT2    = Color3.fromRGB(205, 110, 255)
+local ACCENT_DIM = Color3.fromRGB(95, 58, 175)
+local TRACK_OFF  = Color3.fromRGB(40, 32, 62)
+local TRACK_ON   = Color3.fromRGB(150, 90, 255)
 local RED        = Color3.fromRGB(255, 80, 100)
 local YELLOW     = Color3.fromRGB(255, 200, 60)
 local GREEN      = Color3.fromRGB(80, 255, 140)
-local SIDEBAR_BG = Color3.fromRGB(10, 10, 20)
+local SIDEBAR_BG = Color3.fromRGB(13, 10, 24)
 
 local function playSound(id, vol, pitch)
 	pcall(function()
@@ -357,7 +357,7 @@ local accentTop = make("Frame", {
 	BackgroundColor3 = ACCENT, BorderSizePixel = 0, Parent = window,
 }, {
 	make("UICorner", { CornerRadius = UDim.new(0, 3) }),
-	make("UIGradient", { Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 60, 120)), ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 80, 200)), ColorSequenceKeypoint.new(0.4, ACCENT), ColorSequenceKeypoint.new(0.6, ACCENT2), ColorSequenceKeypoint.new(0.8, Color3.fromRGB(80, 255, 160)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 60, 120))}) }),
+	make("UIGradient", { Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(90, 40, 200)), ColorSequenceKeypoint.new(0.2, ACCENT), ColorSequenceKeypoint.new(0.4, ACCENT2), ColorSequenceKeypoint.new(0.6, Color3.fromRGB(230, 120, 235)), ColorSequenceKeypoint.new(0.8, ACCENT2), ColorSequenceKeypoint.new(1, Color3.fromRGB(90, 40, 200))}) }),
 })
 
 task.spawn(function()
@@ -385,7 +385,7 @@ local versionBadge = make("Frame", {
 	Size = UDim2.fromOffset(36, 15), Position = UDim2.fromOffset(18, 30), BackgroundColor3 = ACCENT_DIM, Parent = titleBar,
 }, {
 	make("UICorner", { CornerRadius = UDim.new(0, 6) }),
-	make("TextLabel", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "v5.0", TextColor3 = ACCENT2, Font = Enum.Font.GothamBlack, TextSize = 9 }),
+	make("TextLabel", { Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "v1.0", TextColor3 = ACCENT2, Font = Enum.Font.GothamBlack, TextSize = 9 }),
 })
 local subtitleLabel = make("TextLabel", {
 	Size = UDim2.new(0, 100, 0, 15), Position = UDim2.fromOffset(58, 29), BackgroundTransparency = 1,
@@ -628,9 +628,20 @@ local sidebarList = make("Frame", {
 
 local tabPages, tabButtons = {}, {}
 local activeTab = nil
-local TABS = { "Movement", "Visuals", "Character", "Players", "Teleport", "Auto", "Slayer", "Demon", "Utility", "Settings" }
-local TAB_SHORT = { "Move", "Visuals", "Character", "Players", "TP", "Auto", "Slayer", "Demon", "Utility", "Config" }
+local TABS = { "Movement", "Visuals", "Character", "Auto", "Teleport", "Slayer", "Demon", "Players", "Utility", "Settings" }
+local TAB_SHORT = { "Move", "Visuals", "Character", "Auto", "TP", "Slayer", "Demon", "Players", "Utility", "Config" }
+local TAB_GROUP_START = { [1] = "PLAYER", [4] = "GAMEPLAY", [9] = "SYSTEM" }
 
+local function addSidebarGroupHeader(text, order)
+	make("TextLabel", {
+		Size = UDim2.new(1, -8, 0, 18), Position = UDim2.fromOffset(8, 0),
+		BackgroundTransparency = 1, Text = text, TextColor3 = ACCENT_DIM,
+		Font = Enum.Font.GothamBold, TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left,
+		LayoutOrder = order, Parent = sidebarList,
+	})
+end
+
+local sidebarOrder = 0
 for i, name in TABS do
 	local page = make("ScrollingFrame", {
 		Size = UDim2.new(1, -SIDEBAR_W, 1, 0), Position = UDim2.fromOffset(SIDEBAR_W, 0), BackgroundTransparency = 1,
@@ -642,10 +653,16 @@ for i, name in TABS do
 	})
 	tabPages[name] = page
 
+	if TAB_GROUP_START[i] then
+		sidebarOrder += 1
+		addSidebarGroupHeader(TAB_GROUP_START[i], sidebarOrder)
+	end
+
+	sidebarOrder += 1
 	local btn = make("TextButton", {
 		Size = UDim2.new(1, 0, 0, 36), BackgroundColor3 = SIDEBAR_BG, BackgroundTransparency = 1,
 		AutoButtonColor = false, Text = TAB_SHORT[i],
-		TextColor3 = DIM, Font = Enum.Font.GothamBold, TextSize = 13, LayoutOrder = i, Parent = sidebarList,
+		TextColor3 = DIM, Font = Enum.Font.GothamBold, TextSize = 13, LayoutOrder = sidebarOrder, Parent = sidebarList,
 	}, { make("UICorner", { CornerRadius = UDim.new(0, 6) }) })
 
 	local indicator = make("Frame", {
@@ -705,7 +722,7 @@ local function addLabel(tab, text)
 		BackgroundColor3 = ACCENT, Parent = lbl,
 	}, {
 		make("UICorner", { CornerRadius = UDim.new(1, 0) }),
-		make("UIGradient", { Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 200)), ColorSequenceKeypoint.new(0.5, ACCENT), ColorSequenceKeypoint.new(1, ACCENT2)}) }),
+		make("UIGradient", { Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(90, 40, 200)), ColorSequenceKeypoint.new(0.5, ACCENT), ColorSequenceKeypoint.new(1, ACCENT2)}) }),
 	})
 	make("TextLabel", {
 		Size = UDim2.new(1, -14, 1, 0), Position = UDim2.fromOffset(12, 0), BackgroundTransparency = 1, Text = text,
@@ -786,7 +803,7 @@ local function addSlider(tab, label, min, max, default, step, callback)
 	local bar = make("Frame", { Size = UDim2.new(1, -28, 0, 8), Position = UDim2.new(0, 14, 0, 32), BackgroundColor3 = TRACK_OFF, BorderSizePixel = 0, Parent = row }, { make("UICorner", { CornerRadius = UDim.new(1, 0) }) })
 	local fill = make("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = ACCENT, BorderSizePixel = 0, Parent = bar }, {
 		make("UICorner", { CornerRadius = UDim.new(1, 0) }),
-		make("UIGradient", { Color = ColorSequence.new({ColorSequenceKeypoint.new(0, ACCENT), ColorSequenceKeypoint.new(0.5, ACCENT2), ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 255, 160))}) }),
+		make("UIGradient", { Color = ColorSequence.new({ColorSequenceKeypoint.new(0, ACCENT), ColorSequenceKeypoint.new(0.5, ACCENT2), ColorSequenceKeypoint.new(1, Color3.fromRGB(230, 190, 255))}) }),
 	})
 	local knobS = make("Frame", { Size = UDim2.fromOffset(14, 14), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0, 0.5), BackgroundColor3 = WHITE, Parent = bar }, {
 		make("UICorner", { CornerRadius = UDim.new(1, 0) }),
@@ -1010,7 +1027,7 @@ local function addCollapsible(tab, title, startOpen)
 		BackgroundColor3 = ACCENT, Parent = headerBtn,
 	}, {
 		make("UICorner", { CornerRadius = UDim.new(1, 0) }),
-		make("UIGradient", { Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 200)), ColorSequenceKeypoint.new(0.5, ACCENT), ColorSequenceKeypoint.new(1, ACCENT2)}) }),
+		make("UIGradient", { Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(90, 40, 200)), ColorSequenceKeypoint.new(0.5, ACCENT), ColorSequenceKeypoint.new(1, ACCENT2)}) }),
 	})
 
 	make("TextLabel", {
@@ -1142,7 +1159,7 @@ local function addCollapsible(tab, title, startOpen)
 		local bar = make("Frame", { Size = UDim2.new(1, -28, 0, 8), Position = UDim2.new(0, 14, 0, 32), BackgroundColor3 = TRACK_OFF, BorderSizePixel = 0, Parent = row }, { make("UICorner", { CornerRadius = UDim.new(1, 0) }) })
 		local fill = make("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = ACCENT, BorderSizePixel = 0, Parent = bar }, {
 			make("UICorner", { CornerRadius = UDim.new(1, 0) }),
-			make("UIGradient", { Color = ColorSequence.new({ColorSequenceKeypoint.new(0, ACCENT), ColorSequenceKeypoint.new(0.5, ACCENT2), ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 255, 160))}) }),
+			make("UIGradient", { Color = ColorSequence.new({ColorSequenceKeypoint.new(0, ACCENT), ColorSequenceKeypoint.new(0.5, ACCENT2), ColorSequenceKeypoint.new(1, Color3.fromRGB(230, 190, 255))}) }),
 		})
 		local knobS = make("Frame", { Size = UDim2.fromOffset(14, 14), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0, 0.5), BackgroundColor3 = WHITE, Parent = bar }, {
 			make("UICorner", { CornerRadius = UDim.new(1, 0) }),
@@ -5183,7 +5200,7 @@ do -- startup animation
 		BackgroundColor3 = ACCENT, BackgroundTransparency = 0, BorderSizePixel = 0, Parent = splashBg,
 	}, {
 		make("UICorner", { CornerRadius = UDim.new(0, 3) }),
-		make("UIGradient", { Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 60, 120)), ColorSequenceKeypoint.new(0.3, ACCENT), ColorSequenceKeypoint.new(0.6, ACCENT2), ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 255, 160))}) }),
+		make("UIGradient", { Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(90, 40, 200)), ColorSequenceKeypoint.new(0.3, ACCENT), ColorSequenceKeypoint.new(0.6, ACCENT2), ColorSequenceKeypoint.new(1, Color3.fromRGB(230, 190, 255))}) }),
 	})
 
 	local splashBottomLine = make("Frame", {
@@ -5203,7 +5220,7 @@ do -- startup animation
 
 	local splashVer = make("TextLabel", {
 		Size = UDim2.new(1, 0, 0, 18), Position = UDim2.fromOffset(0, 56),
-		BackgroundTransparency = 1, Text = "v5.0", TextColor3 = ACCENT,
+		BackgroundTransparency = 1, Text = "v1.0", TextColor3 = ACCENT,
 		TextTransparency = 1, Font = Enum.Font.GothamBlack, TextSize = 12, Parent = splashBg,
 	})
 
@@ -5298,7 +5315,7 @@ do -- startup animation
 
 		task.delay(0.1, function() afkToggle.fire() end)
 
-		notify("F4XI HUB v5.0 loaded")
+		notify("F4XI HUB v1.0 loaded")
 		task.delay(0.4, function() notify("RightShift = toggle | X = speed | Y = fly") end)
 		task.delay(0.8, function() notify("F8 = emergency stop quest loop") end)
 		task.delay(1.2, function() notify("Anti-AFK auto-enabled") end)
