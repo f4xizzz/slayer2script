@@ -3041,6 +3041,7 @@ local BOSS_TYPES = {
 }
 
 local stopFarmHold
+local comboCounter = 0
 
 local autoBossFarmEnabled = false
 local autoBossFarmTarget = "All Bosses"
@@ -3183,7 +3184,6 @@ end
 local VIM = nil
 pcall(function() VIM = game:GetService("VirtualInputManager") end)
 
-local comboCounter = 0
 local lastAttackTime = 0
 
 local WEAPON_TIMINGS = {
