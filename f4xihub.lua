@@ -4788,6 +4788,35 @@ end)
 addSpacer("Utility")
 addLabel("Utility", "SERVER")
 
+local serverJoinTime = os.time()
+orders["Utility"] += 1
+local uptimeRow = make("Frame", {
+	Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = BG_CARD, LayoutOrder = orders["Utility"], Parent = tabPages["Utility"],
+}, {
+	make("UICorner", { CornerRadius = UDim.new(0, 10) }),
+	make("UIStroke", { Color = BORDER, Thickness = 1 }),
+})
+make("TextLabel", {
+	Size = UDim2.new(1, -60, 1, 0), Position = UDim2.fromOffset(18, 0), BackgroundTransparency = 1,
+	Text = "Server Uptime", TextColor3 = WHITE, Font = Enum.Font.GothamMedium, TextSize = 13,
+	TextXAlignment = Enum.TextXAlignment.Left, Parent = uptimeRow,
+})
+local uptimeValue = make("TextLabel", {
+	Size = UDim2.new(0, 90, 1, 0), Position = UDim2.new(1, -100, 0, 0), BackgroundTransparency = 1,
+	Text = "00:00:00", TextColor3 = ACCENT2, Font = Enum.Font.GothamBold, TextSize = 13,
+	TextXAlignment = Enum.TextXAlignment.Right, Parent = uptimeRow,
+})
+task.spawn(function()
+	while uptimeValue and uptimeValue.Parent do
+		local elapsed = os.time() - serverJoinTime
+		local h = math.floor(elapsed / 3600)
+		local m = math.floor((elapsed % 3600) / 60)
+		local s = elapsed % 60
+		uptimeValue.Text = string.format("%02d:%02d:%02d", h, m, s)
+		task.wait(1)
+	end
+end)
+
 addButton("Utility", "Rejoin Server", function() notify("Rejoining..."); task.wait(0.3); TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId) end)
 addButton("Utility", "Server Hop", function() notify("Hopping..."); task.wait(0.3); TeleportService:Teleport(game.PlaceId) end)
 
