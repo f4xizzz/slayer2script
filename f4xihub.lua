@@ -88,124 +88,8 @@ do
 end
 
 do
-	local playerGui = player:WaitForChild("PlayerGui")
-	local gateGui = Instance.new("ScreenGui")
-	gateGui.Name = "F4xiGate"
-	gateGui.ResetOnSpawn = false
-	gateGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gateGui.DisplayOrder = 999
-	gateGui.Parent = playerGui
-
-	local bg = Instance.new("Frame")
-	bg.Size = UDim2.new(1, 0, 1, 0)
-	bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-	bg.BackgroundTransparency = 0.4
-	bg.BorderSizePixel = 0
-	bg.Parent = gateGui
-
-	local card = Instance.new("Frame")
-	card.Size = UDim2.new(0, 340, 0, 260)
-	card.Position = UDim2.new(0.5, -170, 0.5, -130)
-	card.BackgroundColor3 = Color3.fromRGB(8, 8, 16)
-	card.BorderSizePixel = 0
-	card.Parent = gateGui
-	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 12)
-	local stroke = Instance.new("UIStroke", card)
-	stroke.Color = Color3.fromRGB(130, 80, 255)
-	stroke.Thickness = 1.5
-
-	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(1, -20, 0, 30)
-	title.Position = UDim2.new(0, 10, 0, 20)
-	title.BackgroundTransparency = 1
-	title.Text = "f4xi hub v1.0"
-	title.TextColor3 = Color3.fromRGB(130, 80, 255)
-	title.Font = Enum.Font.GothamBold
-	title.TextSize = 20
-	title.Parent = card
-
-	local sub = Instance.new("TextLabel")
-	sub.Size = UDim2.new(1, -20, 0, 40)
-	sub.Position = UDim2.new(0, 10, 0, 55)
-	sub.BackgroundTransparency = 1
-	sub.Text = "Join our Discord server to\nunlock the full script hub."
-	sub.TextColor3 = Color3.fromRGB(180, 180, 200)
-	sub.Font = Enum.Font.Gotham
-	sub.TextSize = 14
-	sub.TextWrapped = true
-	sub.Parent = card
-
-	local linkLabel = Instance.new("TextLabel")
-	linkLabel.Size = UDim2.new(1, -20, 0, 20)
-	linkLabel.Position = UDim2.new(0, 10, 0, 100)
-	linkLabel.BackgroundTransparency = 1
-	linkLabel.Text = "discord.gg/nnXC6MBjPz"
-	linkLabel.TextColor3 = Color3.fromRGB(80, 180, 255)
-	linkLabel.Font = Enum.Font.GothamBold
-	linkLabel.TextSize = 13
-	linkLabel.Parent = card
-
-	local copyBtn = Instance.new("TextButton")
-	copyBtn.Size = UDim2.new(1, -40, 0, 40)
-	copyBtn.Position = UDim2.new(0, 20, 0, 135)
-	copyBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
-	copyBtn.Text = "Copy Discord Invite"
-	copyBtn.TextColor3 = Color3.new(1, 1, 1)
-	copyBtn.Font = Enum.Font.GothamBold
-	copyBtn.TextSize = 15
-	copyBtn.Parent = card
-	Instance.new("UICorner", copyBtn).CornerRadius = UDim.new(0, 8)
-
-	local continueBtn = Instance.new("TextButton")
-	continueBtn.Size = UDim2.new(1, -40, 0, 40)
-	continueBtn.Position = UDim2.new(0, 20, 0, 190)
-	continueBtn.BackgroundColor3 = Color3.fromRGB(130, 80, 255)
-	continueBtn.Text = "I've Joined - Continue"
-	continueBtn.TextColor3 = Color3.new(1, 1, 1)
-	continueBtn.Font = Enum.Font.GothamBold
-	continueBtn.TextSize = 15
-	continueBtn.BackgroundTransparency = 0.6
-	continueBtn.Parent = card
-	Instance.new("UICorner", continueBtn).CornerRadius = UDim.new(0, 8)
-
-	local copied = false
-	copyBtn.MouseButton1Click:Connect(function()
-		if setclipboard then setclipboard(DISCORD_LINK) end
-		copyBtn.Text = "Copied! Now join the server"
-		copied = true
-		continueBtn.BackgroundTransparency = 0
-		task.delay(3, function()
-			if copyBtn and copyBtn.Parent then
-				copyBtn.Text = "Copy Discord Invite"
-			end
-		end)
-	end)
-
-	local passed = false
-	continueBtn.MouseButton1Click:Connect(function()
-		if not copied then
-			copyBtn.Text = "Copy the invite first!"
-			task.delay(2, function()
-				if copyBtn and copyBtn.Parent then
-					copyBtn.Text = "Copy Discord Invite"
-				end
-			end)
-			return
-		end
-		passed = true
-		TweenService:Create(bg, TweenInfo.new(0.3), {BackgroundTransparency = 1}):Play()
-		TweenService:Create(card, TweenInfo.new(0.3), {BackgroundTransparency = 1}):Play()
-		for _, d in card:GetDescendants() do
-			pcall(function()
-				if d:IsA("GuiObject") then TweenService:Create(d, TweenInfo.new(0.3), {BackgroundTransparency = 1}):Play() end
-				if d:IsA("TextLabel") or d:IsA("TextButton") then TweenService:Create(d, TweenInfo.new(0.3), {TextTransparency = 1}):Play() end
-				if d:IsA("UIStroke") then TweenService:Create(d, TweenInfo.new(0.3), {Transparency = 1}):Play() end
-			end)
-		end
-		task.delay(0.35, function() gateGui:Destroy() end)
-	end)
-
-	repeat task.wait() until passed
+	local opened = pcall(function() game:GetService("GuiService"):OpenBrowserWindow(DISCORD_LINK) end)
+	if not opened and setclipboard then pcall(function() setclipboard(DISCORD_LINK) end) end
 end
 
 local UserInputService = game:GetService("UserInputService")
@@ -417,8 +301,6 @@ local closeBtn = makeTitleBtn("X", -40, Color3.fromRGB(80, 20, 30))
 local minBtn = makeTitleBtn("-", -72)
 local expandBtn = makeTitleBtn("<>", -106)
 
-closeBtn.MouseButton1Click:Connect(function() animateGuiClose() end)
-
 local bodyFrame
 local bodyVisible = true
 minBtn.MouseButton1Click:Connect(function()
@@ -542,6 +424,8 @@ local function animateGuiClose()
 	guiVisible = false
 	guiAnimating = false
 end
+
+closeBtn.MouseButton1Click:Connect(function() animateGuiClose() end)
 
 UserInputService.InputBegan:Connect(function(input)
 	if input.KeyCode == keybinds.toggleGui then
@@ -2233,59 +2117,6 @@ addButton("Character", "Spin", function()
 	spin.Parent = hrp; notify("Spin ON")
 end)
 
-local bringMobsActive = false
-addToggle("Character", "Bring All Mobs (Hold)", false, function(on)
-	bringMobsActive = on
-	if on then notify("Bringing mobs continuously...") end
-end)
-
-task.spawn(function()
-	while true do
-		task.wait(0.3)
-		if bringMobsActive then
-			pcall(function()
-				local hrp = getHRP(); if not hrp then return end
-				local sources = {workspace:FindFirstChild("Humanoids"), workspace:FindFirstChild("Debree")}
-				for _, source in sources do
-					if source then
-						for _, desc in source:GetDescendants() do
-							if desc:IsA("Humanoid") and desc.Health > 0 then
-								local root = desc.Parent and desc.Parent:FindFirstChild("HumanoidRootPart")
-								if root and desc.Parent ~= player.Character then
-									local dist = (root.Position - hrp.Position).Magnitude
-									if dist < 500 then
-										root.CFrame = hrp.CFrame + Vector3.new(math.random(-5, 5), 0, math.random(-5, 5))
-										root.Anchored = false
-									end
-								end
-							end
-						end
-					end
-				end
-			end)
-		end
-	end
-end)
-
-addButton("Character", "Bring Mobs Once", function()
-	local hrp = getHRP(); if not hrp then return end
-	local count = 0
-	local sources = {workspace:FindFirstChild("Humanoids"), workspace:FindFirstChild("Debree")}
-	for _, source in sources do
-		if source then
-			for _, desc in source:GetDescendants() do
-				if desc:IsA("Humanoid") and desc.Health > 0 then
-					local root = desc.Parent and desc.Parent:FindFirstChild("HumanoidRootPart")
-					if root and desc.Parent ~= player.Character then
-						pcall(function() root.CFrame = hrp.CFrame + Vector3.new(math.random(-5, 5), 0, math.random(-5, 5)) end)
-						count = count + 1
-					end
-				end
-			end
-		end
-	end
-	notify("Brought " .. count .. " mobs")
-end)
 end -- scope: character
 
 ------------------------------------------------------------
