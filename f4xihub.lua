@@ -512,14 +512,13 @@ end
 local function animateGuiClose()
 	if guiAnimating then return end
 	guiAnimating = true
-	guiVisible = false
-
-	pcall(function() SFX.swooshClose() end)
-	guiSavedPos = window.Position
-
-	local ws = window:FindFirstChildOfClass("UIStroke")
 
 	pcall(function()
+		SFX.swooshClose()
+		guiSavedPos = window.Position
+
+		local ws = window:FindFirstChildOfClass("UIStroke")
+
 		if bodyFrame then
 			TweenService:Create(bodyFrame, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { GroupTransparency = 1 }):Play()
 		end
@@ -538,14 +537,9 @@ local function animateGuiClose()
 		task.wait(0.35)
 	end)
 
-	pcall(function() window.BackgroundTransparency = 0 end)
-	pcall(function() local s = window:FindFirstChildOfClass("UIStroke"); if s then s.Transparency = 0 end end)
-	pcall(function() if bodyFrame then bodyFrame.Visible = bodyVisible; bodyFrame.GroupTransparency = 0 end end)
-	pcall(function() if titleBar then titleBar.Visible = true end end)
-	pcall(function() if accentTop then accentTop.BackgroundTransparency = 0 end end)
-	pcall(function() if glowBar then glowBar.BackgroundTransparency = 0.3 end end)
-	window.Position = UDim2.fromOffset(-9999, -9999)
+	pcall(function() window.Position = UDim2.fromOffset(-9999, -9999) end)
 	pcall(function() notifGui.Enabled = false end)
+	guiVisible = false
 	guiAnimating = false
 end
 
