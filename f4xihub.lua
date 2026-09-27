@@ -225,10 +225,10 @@ end
 ------------------------------------------------------------
 local gui = make("ScreenGui", { Name = "F4xiHub", ResetOnSpawn = false, Parent = playerGui })
 
-local WINDOW_W = 574
-local WINDOW_H_SMALL = 540
+local WINDOW_W = 596
+local WINDOW_H_SMALL = 580
 local WINDOW_H_BIG = 740
-local SIDEBAR_W = 96
+local SIDEBAR_W = 112
 local windowExpanded = false
 
 local window = make("Frame", {
@@ -465,6 +465,22 @@ local searchBox = make("TextBox", {
 	make("UIPadding", { PaddingLeft = UDim.new(0, 8) }),
 })
 
+local tabPages, tabButtons = {}, {}
+local activeTab = nil
+
+local sectionRegistry = {}
+
+local function getSectionFor(tab, child)
+	local sections = sectionRegistry[tab]
+	if not sections then return nil end
+	for _, sec in sections do
+		for _, m in sec.members do
+			if m == child then return sec end
+		end
+	end
+	return nil
+end
+
 local function doSearch(query)
 	query = query:lower()
 	if not activeTab or not tabPages[activeTab] then return end
@@ -472,7 +488,8 @@ local function doSearch(query)
 	for _, child in page:GetChildren() do
 		if child:IsA("GuiObject") then
 			if query == "" then
-				child.Visible = true
+				local sec = getSectionFor(activeTab, child)
+				child.Visible = (not sec) or sec.expanded
 			else
 				local matched = false
 				for _, desc in child:GetDescendants() do
@@ -510,15 +527,14 @@ local sidebarList = make("Frame", {
 	make("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, FillDirection = Enum.FillDirection.Vertical }),
 })
 
-local tabPages, tabButtons = {}, {}
-local activeTab = nil
 local TABS = { "Movement", "Visuals", "Character", "Auto", "Teleport", "Slayer", "Demon", "Players", "Utility", "Settings" }
 local TAB_SHORT = { "Move", "Visuals", "Character", "Auto", "TP", "Slayer", "Demon", "Players", "Utility", "Config" }
+local TAB_ICON = { "MV", "VI", "CH", "AU", "TP", "SL", "DM", "PL", "UT", "CF" }
 local TAB_GROUP_START = { [1] = "PLAYER", [4] = "GAMEPLAY", [9] = "SYSTEM" }
 
 local function addSidebarGroupHeader(text, order)
 	make("TextLabel", {
-		Size = UDim2.new(1, -8, 0, 18), Position = UDim2.fromOffset(8, 0),
+		Size = UDim2.new(1, -8, 0, 16), Position = UDim2.fromOffset(8, 0),
 		BackgroundTransparency = 1, Text = text, TextColor3 = ACCENT_DIM,
 		Font = Enum.Font.GothamBold, TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left,
 		LayoutOrder = order, Parent = sidebarList,
@@ -544,13 +560,27 @@ for i, name in TABS do
 
 	sidebarOrder += 1
 	local btn = make("TextButton", {
-		Size = UDim2.new(1, 0, 0, 36), BackgroundColor3 = SIDEBAR_BG, BackgroundTransparency = 1,
-		AutoButtonColor = false, Text = TAB_SHORT[i],
-		TextColor3 = DIM, Font = Enum.Font.GothamBold, TextSize = 13, LayoutOrder = sidebarOrder, Parent = sidebarList,
-	}, { make("UICorner", { CornerRadius = UDim.new(0, 6) }) })
+		Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = SIDEBAR_BG, BackgroundTransparency = 1,
+		AutoButtonColor = false, Text = "", LayoutOrder = sidebarOrder, Parent = sidebarList,
+	}, { make("UICorner", { CornerRadius = UDim.new(0, 8) }) })
+
+	local badge = make("Frame", {
+		Name = "Badge", Size = UDim2.fromOffset(24, 24), Position = UDim2.fromOffset(6, 7),
+		BackgroundColor3 = ACCENT_DIM, BackgroundTransparency = 0.3, Parent = btn,
+	}, { make("UICorner", { CornerRadius = UDim.new(0, 7) }) })
+	local badgeText = make("TextLabel", {
+		Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = TAB_ICON[i],
+		TextColor3 = ACCENT2, Font = Enum.Font.GothamBlack, TextSize = 10, Parent = badge,
+	})
+
+	local nameLabel = make("TextLabel", {
+		Size = UDim2.new(1, -42, 1, 0), Position = UDim2.fromOffset(38, 0), BackgroundTransparency = 1,
+		Text = TAB_SHORT[i], TextColor3 = DIM, Font = Enum.Font.GothamBold, TextSize = 12,
+		TextXAlignment = Enum.TextXAlignment.Left, Parent = btn,
+	})
 
 	local indicator = make("Frame", {
-		Size = UDim2.new(0, 3, 0.6, 0), Position = UDim2.new(0, 0, 0.2, 0),
+		Name = "Indicator", Size = UDim2.new(0, 3, 0.6, 0), Position = UDim2.new(0, 0, 0.2, 0),
 		BackgroundColor3 = ACCENT, BackgroundTransparency = 1, Parent = btn,
 	}, { make("UICorner", { CornerRadius = UDim.new(1, 0) }) })
 
@@ -561,25 +591,31 @@ for i, name in TABS do
 		SFX.click()
 		if activeTab and tabPages[activeTab] then
 			tabPages[activeTab].Visible = false
-			TweenService:Create(tabButtons[activeTab], TWEEN_FAST, { BackgroundTransparency = 1, TextColor3 = DIM }):Play()
-			local oldInd = tabButtons[activeTab]:FindFirstChild("Frame")
+			local oldBtn = tabButtons[activeTab]
+			TweenService:Create(oldBtn, TWEEN_FAST, { BackgroundTransparency = 1 }):Play()
+			local oldName = oldBtn:FindFirstChild("TextLabel")
+			if oldName then TweenService:Create(oldName, TWEEN_FAST, { TextColor3 = DIM }):Play() end
+			local oldInd = oldBtn:FindFirstChild("Indicator")
 			if oldInd then TweenService:Create(oldInd, TWEEN_FAST, { BackgroundTransparency = 1 }):Play() end
 		end
 		activeTab = name; tabPages[name].Visible = true
 		searchBox.Text = ""
 		doSearch("")
-		TweenService:Create(btn, TWEEN_FAST, { BackgroundTransparency = 0.3, BackgroundColor3 = ACCENT_DIM, TextColor3 = WHITE }):Play()
+		TweenService:Create(btn, TWEEN_FAST, { BackgroundTransparency = 0.3, BackgroundColor3 = ACCENT_DIM }):Play()
+		TweenService:Create(nameLabel, TWEEN_FAST, { TextColor3 = WHITE }):Play()
 		TweenService:Create(indicator, TWEEN_FAST, { BackgroundTransparency = 0 }):Play()
 	end)
 
 	btn.MouseEnter:Connect(function()
 		if activeTab ~= name then
-			TweenService:Create(btn, TWEEN_FAST, { BackgroundTransparency = 0.5, BackgroundColor3 = BG_HOVER, TextColor3 = ACCENT2 }):Play()
+			TweenService:Create(btn, TWEEN_FAST, { BackgroundTransparency = 0.5, BackgroundColor3 = BG_HOVER }):Play()
+			TweenService:Create(nameLabel, TWEEN_FAST, { TextColor3 = ACCENT2 }):Play()
 		end
 	end)
 	btn.MouseLeave:Connect(function()
 		if activeTab ~= name then
-			TweenService:Create(btn, TWEEN_FAST, { BackgroundTransparency = 1, TextColor3 = DIM }):Play()
+			TweenService:Create(btn, TWEEN_FAST, { BackgroundTransparency = 1 }):Play()
+			TweenService:Create(nameLabel, TWEEN_FAST, { TextColor3 = DIM }):Play()
 		end
 	end)
 end
@@ -587,8 +623,9 @@ end
 tabPages["Movement"].Visible = true; activeTab = "Movement"
 tabButtons["Movement"].BackgroundTransparency = 0.3
 tabButtons["Movement"].BackgroundColor3 = ACCENT_DIM
-tabButtons["Movement"].TextColor3 = WHITE
-local movInd = tabButtons["Movement"]:FindFirstChild("Frame")
+local movName = tabButtons["Movement"]:FindFirstChildOfClass("TextLabel")
+if movName then movName.TextColor3 = WHITE end
+local movInd = tabButtons["Movement"]:FindFirstChild("Indicator")
 if movInd then movInd.BackgroundTransparency = 0 end
 
 ------------------------------------------------------------
@@ -598,25 +635,62 @@ local orders = {}; for _, t in TABS do orders[t] = 0 end
 
 local function addLabel(tab, text)
 	orders[tab] += 1
-	local lbl = make("Frame", {
-		Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1, LayoutOrder = orders[tab], Parent = tabPages[tab],
+	local myOrder = orders[tab]
+	local lbl = make("TextButton", {
+		Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = BG_CARD, BackgroundTransparency = 0.4,
+		AutoButtonColor = false, Text = "", LayoutOrder = myOrder, Parent = tabPages[tab],
+	}, {
+		make("UICorner", { CornerRadius = UDim.new(0, 8) }),
 	})
 	make("Frame", {
-		Size = UDim2.new(0, 3, 0, 16), Position = UDim2.fromOffset(0, 5),
+		Size = UDim2.new(0, 3, 0, 16), Position = UDim2.fromOffset(8, 7),
 		BackgroundColor3 = ACCENT, Parent = lbl,
 	}, {
 		make("UICorner", { CornerRadius = UDim.new(1, 0) }),
 		make("UIGradient", { Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(90, 40, 200)), ColorSequenceKeypoint.new(0.5, ACCENT), ColorSequenceKeypoint.new(1, ACCENT2)}) }),
 	})
 	make("TextLabel", {
-		Size = UDim2.new(1, -14, 1, 0), Position = UDim2.fromOffset(12, 0), BackgroundTransparency = 1, Text = text,
+		Size = UDim2.new(1, -40, 1, 0), Position = UDim2.fromOffset(20, 0), BackgroundTransparency = 1, Text = text,
 		TextColor3 = WHITE, Font = Enum.Font.GothamBlack, TextSize = 11,
 		TextXAlignment = Enum.TextXAlignment.Left, Parent = lbl,
 	})
-	make("Frame", {
-		Size = UDim2.new(1, -12, 0, 1), Position = UDim2.new(0, 12, 1, -2),
-		BackgroundColor3 = ACCENT_DIM, BackgroundTransparency = 0.7, BorderSizePixel = 0, Parent = lbl,
+	local arrow = make("TextLabel", {
+		Size = UDim2.fromOffset(24, 30), Position = UDim2.new(1, -28, 0, 0), BackgroundTransparency = 1,
+		Text = "-", TextColor3 = DIM, Font = Enum.Font.GothamBold, TextSize = 15, Parent = lbl,
 	})
+
+	sectionRegistry[tab] = sectionRegistry[tab] or {}
+	local sec = { order = myOrder, header = lbl, arrow = arrow, expanded = (#sectionRegistry[tab] == 0), members = {} }
+	table.insert(sectionRegistry[tab], sec)
+
+	lbl.MouseButton1Click:Connect(function()
+		sec.expanded = not sec.expanded
+		SFX.click()
+		arrow.Text = sec.expanded and "-" or "+"
+		if searchBox.Text == "" then
+			for _, m in sec.members do m.Visible = sec.expanded end
+		end
+	end)
+	lbl.MouseEnter:Connect(function() TweenService:Create(lbl, TWEEN_FAST, { BackgroundTransparency = 0.1 }):Play() end)
+	lbl.MouseLeave:Connect(function() TweenService:Create(lbl, TWEEN_FAST, { BackgroundTransparency = 0.4 }):Play() end)
+end
+
+local function finalizeAccordions()
+	for tab, sections in sectionRegistry do
+		local page = tabPages[tab]
+		for idx, sec in sections do
+			local nextOrder = sections[idx + 1] and sections[idx + 1].order or math.huge
+			for _, child in page:GetChildren() do
+				if child:IsA("GuiObject") and child ~= sec.header and child.LayoutOrder > sec.order and child.LayoutOrder < nextOrder then
+					table.insert(sec.members, child)
+				end
+			end
+			if not sec.expanded then
+				for _, m in sec.members do m.Visible = false end
+				sec.arrow.Text = "+"
+			end
+		end
+	end
 end
 
 local function addToggle(tab, label, default, callback)
@@ -2966,6 +3040,8 @@ local BOSS_TYPES = {
 	"Akazo", "Gyutai", "Reaper",
 }
 
+local stopFarmHold
+
 local autoBossFarmEnabled = false
 local autoBossFarmTarget = "All Bosses"
 
@@ -3276,7 +3352,7 @@ local function startFarmHold(hrp, targetPos, mobPos)
 	end
 end
 
-local function stopFarmHold()
+function stopFarmHold()
 	if farmBP then farmBP:Destroy(); farmBP = nil end
 	if farmBG then farmBG:Destroy(); farmBG = nil end
 	pcall(function() local h = getHumanoid(); if h then h.PlatformStand = false end end)
@@ -4999,6 +5075,8 @@ addButton("Settings", "List Inventory Items", function()
 end)
 
 end -- scope: settings
+
+finalizeAccordions()
 
 ------------------------------------------------------------
 -- STARTUP
