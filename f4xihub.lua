@@ -2973,6 +2973,17 @@ local function collectNearbyChests()
 	local allChests = findChestsWithPrompts(workspace:FindFirstChild("Chests"))
 	for _, chest in findChestsBroad() do table.insert(allChests, chest) end
 
+	if #allChests == 0 then
+		print("[F4XI-CHEST] No chest candidates found (workspace.Chests + broad name scan both empty)")
+	else
+		for _, chest in allChests do
+			pcall(function()
+				local dist = math.round((chest.part.Position - savedCF.Position).Magnitude)
+				print("[F4XI-CHEST] Candidate: " .. chest.model:GetFullName() .. " | dist=" .. dist)
+			end)
+		end
+	end
+
 	for _, chest in allChests do
 		if not autoChestEnabled then break end
 		local dist = (chest.part.Position - savedCF.Position).Magnitude
