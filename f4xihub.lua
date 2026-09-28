@@ -425,7 +425,10 @@ local function animateGuiClose()
 	guiAnimating = false
 end
 
-closeBtn.MouseButton1Click:Connect(function() animateGuiClose() end)
+closeBtn.MouseButton1Click:Connect(function()
+	animateGuiClose()
+	if F4XI_SHUTDOWN then pcall(F4XI_SHUTDOWN) end
+end)
 
 UserInputService.InputBegan:Connect(function(input)
 	if input.KeyCode == keybinds.toggleGui then
@@ -693,6 +696,11 @@ local function finalizeAccordions()
 	end
 end
 
+-- Every toggle registers itself here so the X (close) button can force
+-- everything off in one pass instead of leaking background loops/hooks
+-- when the script gets closed and re-executed.
+local ALL_TOGGLES = {}
+
 local function addToggle(tab, label, default, callback)
 	orders[tab] += 1
 	local state = default
@@ -747,6 +755,13 @@ local function addToggle(tab, label, default, callback)
 		state = not state; render(true)
 		task.spawn(callback, state)
 	end
+	function ctrl.turnOff()
+		if not state then return end
+		state = false
+		pcall(render, false)
+		pcall(callback, false)
+	end
+	table.insert(ALL_TOGGLES, ctrl)
 	return ctrl
 end
 
@@ -2854,6 +2869,7 @@ end
 local function collectLootDropsNearby(centerPos, range)
 	local hrp = getHRP(); if not hrp then return 0 end
 	local picked = 0
+	local candidates = 0
 	pcall(function()
 		local debree = workspace:FindFirstChild("Debree")
 		local searchContainer = if debree then debree else workspace
@@ -2864,30 +2880,24 @@ local function collectLootDropsNearby(centerPos, range)
 					local part = obj
 					if obj:IsA("Model") then part = obj:FindFirstChildWhichIsA("BasePart") end
 					if part and (part.Position - centerPos).Magnitude < range then
-						hrp.CFrame = part.CFrame + Vector3.new(0, 1, 0)
-						task.wait(0.15)
-						-- Some drops use a ProximityPrompt, others are collected by touch
-						-- (same as Spider Lily) -- try both so either style works.
-						pcall(function()
-							local prompt = part:FindFirstChildWhichIsA("ProximityPrompt", true)
-							if prompt and prompt.Enabled and not isNpcPrompt(prompt) then
-								fireproximityprompt(prompt)
-							end
-						end)
-						pcall(function()
-							if firetouchinterest then
-								firetouchinterest(hrp, part, 0)
-								task.wait(0.1)
-								firetouchinterest(hrp, part, 1)
-							end
-						end)
-						picked += 1
-						task.wait(0.15)
+						candidates += 1
+						print("[F4XI-LOOT] Candidate: " .. obj:GetFullName())
+						-- touchCollect (Demon tab) approaches from an offset and tries both
+						-- ProximityPrompt and firetouchinterest -- same technique as Spider Lily.
+						touchCollect(hrp, part)
+						if not objectStillExists(obj) then
+							picked += 1
+						else
+							print("[F4XI-LOOT] Touch attempted but " .. obj:GetFullName() .. " is still there")
+						end
 					end
 				end
 			end
 		end
 	end)
+	if candidates == 0 then
+		print("[F4XI-LOOT] No loot candidates found this pass")
+	end
 	return picked
 end
 
@@ -4459,7 +4469,15 @@ local autoSoulEnabled = false
 -- server->client SoulHandler effect (Spawn/Idle/Disappear), no FireServer call.
 -- They're collected by touch, same as Spider Lily elsewhere in this script, so
 -- we walk onto the part and simulate a touch instead of firing a prompt.
-local function touchCollect(hrp, part)
+-- Global (not local): also used by the Auto tab's loot-drop collector.
+-- Approaches from a slight offset instead of teleporting dead-center on the
+-- object -- landing exactly on top of it shoved it away as a collision
+-- (reported as the soul "walking off" on its own), which also meant the
+-- pickup never actually registered.
+function touchCollect(hrp, part)
+	local approachCF = CFrame.new(part.Position + Vector3.new(2.5, 1.5, 0))
+	hrp.CFrame = approachCF
+	task.wait(0.15)
 	pcall(function()
 		local prompt = part:FindFirstChildWhichIsA("ProximityPrompt", true)
 		if prompt and prompt.Enabled then pcall(function() fireproximityprompt(prompt) end) end
@@ -4467,10 +4485,18 @@ local function touchCollect(hrp, part)
 	pcall(function()
 		if firetouchinterest then
 			firetouchinterest(hrp, part, 0)
-			task.wait(0.1)
+			task.wait(0.15)
 			firetouchinterest(hrp, part, 1)
 		end
 	end)
+	task.wait(0.25)
+end
+
+-- Only report something as collected once it's actually gone -- previously
+-- this counted every attempt as a success even when the touch never
+-- registered server-side.
+function objectStillExists(obj)
+	return obj and obj.Parent ~= nil
 end
 
 addToggle("Demon", "Auto Pickup Souls", false, function(on)
@@ -4484,6 +4510,8 @@ addToggle("Demon", "Auto Pickup Souls", false, function(on)
 				local container = debree or workspace
 				local savedCF = hrp.CFrame
 				local picked = 0
+				local candidates = 0
+
 				for _, obj in container:GetDescendants() do
 					if not autoSoulEnabled then break end
 					pcall(function()
@@ -4493,16 +4521,24 @@ addToggle("Demon", "Auto Pickup Souls", false, function(on)
 								local part = obj
 								if obj:IsA("Model") then part = obj:FindFirstChildWhichIsA("BasePart") end
 								if part then
-									hrp.CFrame = part.CFrame + Vector3.new(0, 1, 0)
-									task.wait(0.15)
+									candidates += 1
+									print("[F4XI-SOUL] Candidate: " .. obj:GetFullName())
 									touchCollect(hrp, part)
-									picked += 1
-									task.wait(0.15)
+									if not objectStillExists(obj) then
+										picked += 1
+									else
+										print("[F4XI-SOUL] Touch attempted but " .. obj:GetFullName() .. " is still there")
+									end
 								end
 							end
 						end
 					end)
 				end
+
+				if candidates == 0 then
+					print("[F4XI-SOUL] No soul candidates found this pass")
+				end
+
 				if picked > 0 then
 					hrp.CFrame = savedCF
 					notify("Picked up " .. picked .. " soul(s)")
@@ -5849,4 +5885,23 @@ do -- startup animation
 		task.delay(0.8, function() notify("F8 = emergency stop quest loop") end)
 		task.delay(1.2, function() notify("Anti-AFK auto-enabled") end)
 	end)
+end -- do -- startup animation
+
+------------------------------------------------------------
+-- FULL UNLOAD (X button)
+------------------------------------------------------------
+-- Every addToggle registers itself in ALL_TOGGLES, so this turns off every
+-- feature's underlying loop/hook (not just the switch's look) in one pass,
+-- then removes the GUIs. Global on purpose: the X button is wired up near
+-- the top of the file, long before every toggle here even exists.
+function F4XI_SHUTDOWN()
+	for _, ctrl in ALL_TOGGLES do
+		pcall(ctrl.turnOff)
+	end
+	for _, name in {"F4xiHub", "F4xiNotifs", "F4xiConsole", "F4xiSplash"} do
+		pcall(function()
+			local g = playerGui:FindFirstChild(name)
+			if g then g:Destroy() end
+		end)
+	end
 end
