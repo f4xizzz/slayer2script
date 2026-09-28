@@ -5216,6 +5216,149 @@ LogService.MessageOut:Connect(function(msg, msgType)
 end)
 
 addToggle("Utility", "Console", false, function(on) conEnabled = on; conGui.Enabled = on end)
+
+addSpacer("Utility")
+addLabel("Utility", "SPYBOT")
+
+local spyEnabled = false
+local spyNamecallHooked = false
+local spyConnections = {}
+local spySeenRemotes = {}
+local D2C = nil
+
+local function loadD2C()
+	if D2C then return D2C end
+	pcall(function()
+		D2C = loadstring(game:HttpGet("https://raw.githubusercontent.com/Awakenchan/GcViewerV2/refs/heads/main/Utility/Data2Code%40Amity.lua"))()
+	end)
+	return D2C
+end
+
+local function spySerialize(value)
+	local ok, d2c = pcall(loadD2C)
+	if ok and d2c then
+		local ok2, s = pcall(function() return d2c.Convert(value, true) end)
+		if ok2 then return s end
+	end
+	return tostring(value)
+end
+
+local function spyLog(tag, ...)
+	local parts = {}
+	for i = 1, select("#", ...) do
+		table.insert(parts, spySerialize((select(i, ...))))
+	end
+	print("[SPY][" .. tag .. "] " .. table.concat(parts, " | "))
+end
+
+local function connectRemote(inst)
+	if spySeenRemotes[inst] then return end
+	spySeenRemotes[inst] = true
+	pcall(function()
+		if inst:IsA("RemoteEvent") then
+			table.insert(spyConnections, inst.OnClientEvent:Connect(function(...)
+				if spyEnabled then spyLog("IN " .. inst:GetFullName(), ...) end
+			end))
+		elseif inst:IsA("RemoteFunction") then
+			local old = inst.OnClientInvoke
+			inst.OnClientInvoke = function(...)
+				if spyEnabled then spyLog("INVOKE " .. inst:GetFullName(), ...) end
+				if old then return old(...) end
+			end
+		end
+	end)
+end
+
+local function scanForRemotes(root)
+	pcall(function()
+		for _, obj in root:GetDescendants() do
+			if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+				connectRemote(obj)
+			end
+		end
+	end)
+end
+
+addToggle("Utility", "Spybot (Log Everything)", false, function(on)
+	spyEnabled = on
+	if not on then
+		notify("Spybot OFF")
+		return
+	end
+	notify("Spybot ON -- open Console to see logs")
+
+	scanForRemotes(game:GetService("ReplicatedStorage"))
+	scanForRemotes(workspace)
+
+	pcall(function()
+		table.insert(spyConnections, game:GetService("ReplicatedStorage").DescendantAdded:Connect(function(obj)
+			if spyEnabled and (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) then
+				connectRemote(obj)
+				spyLog("NEW-REMOTE", obj:GetFullName())
+			end
+		end))
+	end)
+
+	if hookmetamethod and newcclosure and not spyNamecallHooked then
+		spyNamecallHooked = true
+		local oldNamecall
+		oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+			local method = getnamecallmethod()
+			if spyEnabled and (method == "FireServer" or method == "InvokeServer") then
+				local args = {...}
+				pcall(function() spyLog("OUT " .. method .. " " .. self:GetFullName(), table.unpack(args)) end)
+			end
+			return oldNamecall(self, ...)
+		end))
+	end
+end)
+
+addButton("Utility", "Spybot: Save Full Snapshot", function()
+	pcall(function()
+		local lines = {}
+		table.insert(lines, "=== F4XI SPYBOT SNAPSHOT ===")
+		table.insert(lines, "Time: " .. os.date())
+		table.insert(lines, "")
+
+		table.insert(lines, "-- KNOWN REMOTES (seen so far, toggle Spybot ON first) --")
+		for inst in pairs(spySeenRemotes) do
+			pcall(function() table.insert(lines, inst.ClassName .. " | " .. inst:GetFullName()) end)
+		end
+
+		table.insert(lines, "")
+		table.insert(lines, "-- RUNNING SCRIPTS --")
+		pcall(function()
+			for _, s in getrunningscripts() do
+				pcall(function() table.insert(lines, s.ClassName .. " | " .. s:GetFullName()) end)
+			end
+		end)
+
+		table.insert(lines, "")
+		table.insert(lines, "-- MY ACTIVE QUESTS --")
+		pcall(function()
+			local ps = game:GetService("ReplicatedStorage"):FindFirstChild("Player_Service")
+			local pData = ps and ps:FindFirstChild("Data") and ps.Data:FindFirstChild(player.Name)
+			if pData then
+				local slotNum = 1
+				pcall(function() local se = pData:FindFirstChild("slotEquipped"); if se then slotNum = se.Value end end)
+				local slots = pData:FindFirstChild("slots")
+				local activeSlot = slots and slots:FindFirstChild("Slot" .. slotNum)
+				local holder = activeSlot and activeSlot:FindFirstChild("Quests") and activeSlot.Quests:FindFirstChild("Holder")
+				if holder then
+					for _, child in holder:GetChildren() do
+						local qs = child:FindFirstChild("QuestString")
+						if qs then table.insert(lines, "Quest: " .. tostring(qs.Value)) end
+					end
+				end
+			end
+		end)
+
+		local data = table.concat(lines, "\n")
+		local ok = pcall(function() writefile("f4xi_spy_snapshot.txt", data) end)
+		if ok then notify("Snapshot saved -> f4xi_spy_snapshot.txt") else notify("writefile unavailable") end
+	end)
+end)
+
 end -- scope: utility
 
 ------------------------------------------------------------
