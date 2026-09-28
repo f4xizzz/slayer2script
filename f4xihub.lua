@@ -2888,8 +2888,12 @@ end
 -- since there's nothing else distinguishing them from a real drop.
 local NON_LOOT_NAME_KEYWORDS = {"spawncrystal", "shrine", "spawn point", "setspawn"}
 
-local function looksLikeNonLoot(name)
-	local lower = name:lower()
+-- Checks the object's whole path, not just its own name -- the candidate is
+-- often a generically-named child part (e.g. "Root") whose PARENT is the
+-- thing that's actually a shrine/fixture, like ".../SpawnCrystal.Root".
+local function looksLikeNonLoot(obj)
+	local ok, full = pcall(function() return obj:GetFullName() end)
+	local lower = (ok and full or obj.Name):lower()
 	for _, kw in NON_LOOT_NAME_KEYWORDS do
 		if lower:find(kw) then return true end
 	end
@@ -2912,7 +2916,7 @@ local function collectLootDropsNearby(centerPos, range)
 			-- the shrine before this fix) can't abort the whole pass and skip
 			-- every candidate that would've come after it.
 			pcall(function()
-				if (obj:IsA("BasePart") or obj:IsA("Model")) and not isNpcOrMob(obj) and not looksLikeNonLoot(obj.Name) then
+				if (obj:IsA("BasePart") or obj:IsA("Model")) and not isNpcOrMob(obj) and not looksLikeNonLoot(obj) then
 					local prompt = obj:IsA("BasePart") and obj:FindFirstChildWhichIsA("ProximityPrompt") or obj:FindFirstChildWhichIsA("ProximityPrompt", true)
 					if prompt and prompt.Enabled then
 						local part = obj
@@ -4611,6 +4615,37 @@ addToggle("Demon", "Auto Pickup Souls", false, function(on)
 			end)
 			task.wait(2)
 		end
+	end)
+end)
+
+addButton("Demon", "Inspect Nearest Soul (debug)", function()
+	pcall(function()
+		local debree = workspace:FindFirstChild("Debree")
+		local container = debree or workspace
+		local target = nil
+		for _, obj in container:GetDescendants() do
+			if (obj:IsA("BasePart") or obj:IsA("Model")) and obj.Name:lower():find("soul") then
+				target = obj
+				break
+			end
+		end
+		if not target then
+			f4xiDebug("[F4XI-INSPECT] No soul found in Debree right now")
+			notify("No soul found to inspect")
+			return
+		end
+		f4xiDebug("[F4XI-INSPECT] Target: " .. target:GetFullName() .. " (" .. target.ClassName .. ")")
+		for _, desc in target:GetDescendants() do
+			local extra = ""
+			if desc:IsA("ProximityPrompt") then
+				extra = string.format(" [Enabled=%s HoldDuration=%s MaxActivationDistance=%s ActionText=%s]",
+					tostring(desc.Enabled), tostring(desc.HoldDuration), tostring(desc.MaxActivationDistance), tostring(desc.ActionText))
+			elseif desc:IsA("BasePart") then
+				extra = string.format(" [CanCollide=%s CanTouch=%s CanQuery=%s]", tostring(desc.CanCollide), tostring(desc.CanTouch), tostring(desc.CanQuery))
+			end
+			f4xiDebug("[F4XI-INSPECT]   " .. desc.Name .. " (" .. desc.ClassName .. ")" .. extra)
+		end
+		notify("Inspected " .. target.Name .. " -- check console/snapshot")
 	end)
 end)
 
