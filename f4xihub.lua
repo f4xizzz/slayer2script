@@ -3062,7 +3062,6 @@ local BOSS_TYPES = {
 	"Akazo", "Gyutai", "Reaper",
 }
 
-local stopFarmHold
 local comboCounter = 0
 
 local autoBossFarmEnabled = false
@@ -3237,7 +3236,8 @@ local function equipWeapon(slot)
 	end
 end
 
-local function fireAttack()
+-- Global (not local): the Demon tab's quest loops call this too.
+function fireAttack()
 	local now = os.clock()
 	local delay = getSwingDelay()
 	if now - lastAttackTime < delay then return end
@@ -3324,7 +3324,7 @@ player.CharacterAdded:Connect(function(char)
 	end
 end)
 
-local function getAttackPosition(mobPos, hrp)
+function getAttackPosition(mobPos, hrp)
 	if autoFarmAttackStyle == "top" then
 		return Vector3.new(mobPos.X, mobPos.Y + autoFarmHoverHeight, mobPos.Z)
 	else
@@ -3337,7 +3337,7 @@ local function getAttackPosition(mobPos, hrp)
 	end
 end
 
-local function getAttackCFrame(mobPos, hrp)
+function getAttackCFrame(mobPos, hrp)
 	local pos = getAttackPosition(mobPos, hrp)
 	if autoFarmAttackStyle == "top" then
 		return CFrame.new(pos) * CFrame.Angles(-math.rad(90), 0, 0)
@@ -3349,7 +3349,7 @@ end
 local farmBP, farmBG
 local lastFarmTarget = Vector3.zero
 
-local function startFarmHold(hrp, targetPos, mobPos)
+function startFarmHold(hrp, targetPos, mobPos)
 	if not farmBP or farmBP.Parent ~= hrp then
 		if farmBP then farmBP:Destroy() end
 		farmBP = Instance.new("BodyPosition")
@@ -3562,7 +3562,7 @@ local questStatusLabel = make("TextLabel", {
 	TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = orders["Auto"], Parent = tabPages["Auto"],
 })
 
-local function getQuestHolder()
+function getQuestHolder()
 	local ps = game:GetService("ReplicatedStorage"):FindFirstChild("Player_Service")
 	if not ps then return nil end
 	local data = ps:FindFirstChild("Data")
@@ -3583,7 +3583,7 @@ local function getQuestHolder()
 	return quests:FindFirstChild("Holder")
 end
 
-local function hasQuest(questName)
+function hasQuest(questName)
 	local holder = getQuestHolder()
 	if not holder then return false end
 	for _, child in holder:GetChildren() do
@@ -5010,7 +5010,6 @@ addToggle("Demon", "Auto Crow Quest (LOOP)", false, function(on)
 	local myId = crowLoopId
 	local function active() return crowLoopEnabled and myId == crowLoopId end
 	task.spawn(function()
-		equipWeapon(autoFarmWeaponSlot)
 		while active() do
 			runNpcQuestLoop("Kasugai Crow", findCrowNPC, active)
 		end
@@ -5027,7 +5026,6 @@ addToggle("Demon", "Auto Muzan Quest (LOOP)", false, function(on)
 	local myId = muzanQuestLoopId
 	local function active() return muzanQuestLoopEnabled and myId == muzanQuestLoopId end
 	task.spawn(function()
-		equipWeapon(autoFarmWeaponSlot)
 		while active() do
 			runNpcQuestLoop("Muzan", findMuzanNPC, active)
 		end
