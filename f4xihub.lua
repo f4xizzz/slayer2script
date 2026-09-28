@@ -4932,10 +4932,20 @@ local conScroll = make("ScrollingFrame", {
 	CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, Parent = conWindow,
 }, { make("UIListLayout", { Padding = UDim.new(0, 1), SortOrder = Enum.SortOrder.LayoutOrder }) })
 
-local conClear = make("TextButton", { Size = UDim2.new(1, -8, 0, 22), Position = UDim2.new(0, 4, 1, -26), BackgroundColor3 = BG_CARD, AutoButtonColor = false, Text = "Clear", TextColor3 = DIM, Font = Enum.Font.Gotham, TextSize = 11, Parent = conWindow }, { make("UICorner", { CornerRadius = UDim.new(0, 4) }) })
+local conCopy = make("TextButton", { Size = UDim2.new(0.5, -6, 0, 22), Position = UDim2.new(0, 4, 1, -26), BackgroundColor3 = BG_CARD, AutoButtonColor = false, Text = "Copy", TextColor3 = DIM, Font = Enum.Font.Gotham, TextSize = 11, Parent = conWindow }, { make("UICorner", { CornerRadius = UDim.new(0, 4) }) })
+local conClear = make("TextButton", { Size = UDim2.new(0.5, -6, 0, 22), Position = UDim2.new(0.5, 2, 1, -26), BackgroundColor3 = BG_CARD, AutoButtonColor = false, Text = "Clear", TextColor3 = DIM, Font = Enum.Font.Gotham, TextSize = 11, Parent = conWindow }, { make("UICorner", { CornerRadius = UDim.new(0, 4) }) })
+
+local conLogLines = {}
+
+conCopy.MouseButton1Click:Connect(function()
+	local ok = pcall(function() setclipboard(table.concat(conLogLines, "\n")) end)
+	if ok then notify("Console copied (" .. #conLogLines .. " lines)") else notify("Copy failed -- setclipboard unavailable") end
+end)
+
 conClear.MouseButton1Click:Connect(function()
 	conScroll:ClearAllChildren()
 	make("UIListLayout", { Padding = UDim.new(0, 1), SortOrder = Enum.SortOrder.LayoutOrder, Parent = conScroll })
+	conLogLines = {}
 end)
 
 local conEnabled = false
@@ -4948,6 +4958,7 @@ LogService.MessageOut:Connect(function(msg, msgType)
 	local prefix = "INFO"
 	if msgType == Enum.MessageType.MessageWarning then color = YELLOW; prefix = "WARN"
 	elseif msgType == Enum.MessageType.MessageError then color = RED; prefix = "ERR" end
+	table.insert(conLogLines, "[" .. prefix .. "] " .. msg)
 	make("TextLabel", {
 		Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1, Text = "[" .. prefix .. "] " .. msg,
