@@ -4773,9 +4773,9 @@ addToggle("Demon", "Debug Remotes (Discovery Mode)", false, function(on)
 end)
 
 addSpacer("Demon")
-addLabel("Demon", "KASUGAI CROW -> MUZAN LOOP")
+addLabel("Demon", "AUTO CROW / AUTO MUZAN (SEPARATE QUESTS)")
 
-local CROW_MUZAN_CONFIG = {
+local QUEST_LOOP_CONFIG = {
 	crowNamePattern = "crow",
 	questSearchRadius = 220,
 }
@@ -4785,7 +4785,7 @@ local function findCrowNPC()
 	pcall(function()
 		for _, obj in workspace:GetDescendants() do
 			if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then
-				if obj.Name:lower():find(CROW_MUZAN_CONFIG.crowNamePattern) and obj:FindFirstChild("HumanoidRootPart") then
+				if obj.Name:lower():find(QUEST_LOOP_CONFIG.crowNamePattern) and obj:FindFirstChild("HumanoidRootPart") then
 					crowModel = obj
 					return
 				end
@@ -4807,19 +4807,22 @@ local function snapshotQuestNames()
 	return names
 end
 
-local function talkToCrowAndAcceptQuest()
+-- Talks to whatever NPC findNpcFn() returns and detects the quest it just gave
+-- by diffing the Quest Holder before/after -- works for Crow, Muzan, or any NPC
+-- without needing to know their exact quest name in advance.
+local function talkToNpcAndAcceptQuest(findNpcFn)
 	local hrp = getHRP(); if not hrp then return nil, nil end
-	local crow = findCrowNPC()
-	if not crow then return nil, nil end
-	local cHRP = crow:FindFirstChild("HumanoidRootPart")
-	if not cHRP then return nil, nil end
+	local npc = findNpcFn()
+	if not npc then return nil, nil end
+	local npcHRP = npc:FindFirstChild("HumanoidRootPart")
+	if not npcHRP then return nil, nil end
 
-	hrp.CFrame = cHRP.CFrame + Vector3.new(0, 3, 0)
+	hrp.CFrame = npcHRP.CFrame + Vector3.new(0, 3, 0)
 	task.wait(0.8)
 
 	local before = snapshotQuestNames()
 	pcall(function()
-		for _, obj in crow:GetDescendants() do
+		for _, obj in npc:GetDescendants() do
 			if obj:IsA("ProximityPrompt") then fireproximityprompt(obj) end
 		end
 	end)
@@ -4832,7 +4835,7 @@ local function talkToCrowAndAcceptQuest()
 	for name in pairs(after) do
 		if not before[name] then newQuest = name; break end
 	end
-	return newQuest, cHRP.Position
+	return newQuest, npcHRP.Position
 end
 
 local function findNearestHostile(centerPos, radius)
@@ -4847,7 +4850,7 @@ local function findNearestHostile(centerPos, radius)
 						local activeNpcs = region:FindFirstChild("ActiveNpcs")
 						if activeNpcs then
 							for _, npcFolder in activeNpcs:GetChildren() do
-								if not npcFolder.Name:lower():find(CROW_MUZAN_CONFIG.crowNamePattern) then
+								if not npcFolder.Name:lower():find(QUEST_LOOP_CONFIG.crowNamePattern) then
 									for _, child in npcFolder:GetChildren() do
 										if child:IsA("Model") then
 											local hum = child:FindFirstChildOfClass("Humanoid")
@@ -4925,95 +4928,67 @@ local function farmHostilesNear(centerPos, radius, isActiveFn)
 	stopFarmHold()
 end
 
-local function fightMuzanBoss(isActiveFn)
-	notify("Searching for Muzan...")
-	local muzan = nil
-	while isActiveFn() and not muzan do
-		muzan = findMuzanNPC()
-		if not muzan then
-			local hrp = getHRP()
-			if hrp then hrp.CFrame = CFrame.new(2467, 1079, 2333) + Vector3.new(0, 5, 0) end
-			task.wait(2)
-		end
+-- Shared driver for a "talk -> accept -> farm until quest gone -> repeat" loop.
+-- npcLabel is just for notify() text; findNpcFn picks who we talk to.
+local function runNpcQuestLoop(npcLabel, findNpcFn, isActiveFn)
+	notify("Looking for " .. npcLabel .. "...")
+	local questName, npcPos = nil, nil
+	for attempt = 1, 30 do
+		if not isActiveFn() then return end
+		questName, npcPos = talkToNpcAndAcceptQuest(findNpcFn)
+		if questName then break end
+		task.wait(1)
 	end
-	if not muzan then return false end
 
-	local mHum = muzan:FindFirstChildOfClass("Humanoid")
-	if not mHum then return false end
+	if not isActiveFn() then return end
 
-	pcall(function()
-		local myHrp = getHRP()
-		local root = muzan:FindFirstChild("HumanoidRootPart")
-		if myHrp and root then myHrp.CFrame = getAttackCFrame(root.Position, myHrp) end
-	end)
-	task.wait()
-
-	notify("Engaging Muzan!")
-	comboCounter = 0
-	while isActiveFn() and muzan.Parent and mHum.Health > 0 do
-		task.wait(0.25)
-		pcall(function()
-			local myHrp = getHRP()
-			local myHum = getHumanoid()
-			if not myHrp or not myHum or myHum.Health <= 0 then return end
-			local root = muzan:FindFirstChild("HumanoidRootPart")
-			if not root then return end
-			myHum.PlatformStand = true
-			startFarmHold(myHrp, getAttackPosition(root.Position, myHrp), root.Position)
-			fireAttack()
-		end)
-	end
-	stopFarmHold()
-	return (not muzan.Parent) or mHum.Health <= 0
-end
-
-local crowMuzanLoopEnabled = false
-local crowMuzanLoopId = 0
-
-addToggle("Demon", "Auto Crow -> Kill Mobs -> Kill Muzan (LOOP)", false, function(on)
-	crowMuzanLoopEnabled = on
-	if not on then
-		notify("Crow/Muzan auto loop stopped")
+	if not questName then
+		notify("No new quest from " .. npcLabel .. " -- retrying in 5s")
+		task.wait(5)
 		return
 	end
-	crowMuzanLoopId = crowMuzanLoopId + 1
-	local myId = crowMuzanLoopId
-	local function active() return crowMuzanLoopEnabled and myId == crowMuzanLoopId end
 
+	notify(npcLabel .. " quest accepted: " .. questName)
+	farmHostilesNear(npcPos, QUEST_LOOP_CONFIG.questSearchRadius, function()
+		return isActiveFn() and hasQuest(questName)
+	end)
+
+	if isActiveFn() then
+		notify(npcLabel .. " quest complete! Looping back...")
+		task.wait(1)
+	end
+end
+
+local crowLoopEnabled = false
+local crowLoopId = 0
+
+addToggle("Demon", "Auto Crow Quest (LOOP)", false, function(on)
+	crowLoopEnabled = on
+	if not on then notify("Auto Crow stopped"); return end
+	crowLoopId = crowLoopId + 1
+	local myId = crowLoopId
+	local function active() return crowLoopEnabled and myId == crowLoopId end
 	task.spawn(function()
 		equipWeapon(autoFarmWeaponSlot)
 		while active() do
-			notify("Looking for Kasugai Crow...")
-			local questName, crowPos = nil, nil
-			for attempt = 1, 30 do
-				if not active() then break end
-				questName, crowPos = talkToCrowAndAcceptQuest()
-				if questName then break end
-				task.wait(1)
-			end
+			runNpcQuestLoop("Kasugai Crow", findCrowNPC, active)
+		end
+	end)
+end)
 
-			if not active() then break end
+local muzanQuestLoopEnabled = false
+local muzanQuestLoopId = 0
 
-			if not questName then
-				notify("No new quest from Crow -- retrying in 5s")
-				task.wait(5)
-			else
-				notify("Quest accepted: " .. questName .. " -- clearing Muzan's mobs")
-				farmHostilesNear(crowPos, CROW_MUZAN_CONFIG.questSearchRadius, function()
-					return active() and hasQuest(questName)
-				end)
-
-				if active() then
-					notify("Mobs cleared -- heading to Muzan")
-					local killed = fightMuzanBoss(active)
-					if killed then
-						notify("Muzan defeated! Looping back to Crow...")
-					else
-						notify("Lost track of Muzan -- retrying loop")
-					end
-					task.wait(1)
-				end
-			end
+addToggle("Demon", "Auto Muzan Quest (LOOP)", false, function(on)
+	muzanQuestLoopEnabled = on
+	if not on then notify("Auto Muzan stopped"); return end
+	muzanQuestLoopId = muzanQuestLoopId + 1
+	local myId = muzanQuestLoopId
+	local function active() return muzanQuestLoopEnabled and myId == muzanQuestLoopId end
+	task.spawn(function()
+		equipWeapon(autoFarmWeaponSlot)
+		while active() do
+			runNpcQuestLoop("Muzan", findMuzanNPC, active)
 		end
 	end)
 end)
@@ -5224,6 +5199,8 @@ local spyEnabled = false
 local spyNamecallHooked = false
 local spyConnections = {}
 local spySeenRemotes = {}
+local spyCallLog = {}
+local SPY_CALL_LOG_MAX = 500
 local D2C = nil
 
 local function loadD2C()
@@ -5248,7 +5225,10 @@ local function spyLog(tag, ...)
 	for i = 1, select("#", ...) do
 		table.insert(parts, spySerialize((select(i, ...))))
 	end
-	print("[SPY][" .. tag .. "] " .. table.concat(parts, " | "))
+	local line = "[SPY][" .. tag .. "] " .. table.concat(parts, " | ")
+	print(line)
+	table.insert(spyCallLog, os.date("%X") .. " " .. line)
+	if #spyCallLog > SPY_CALL_LOG_MAX then table.remove(spyCallLog, 1) end
 end
 
 local function connectRemote(inst)
@@ -5353,10 +5333,23 @@ addButton("Utility", "Spybot: Save Full Snapshot", function()
 			end
 		end)
 
+		table.insert(lines, "")
+		table.insert(lines, "-- CAPTURED CALLS (turn Spybot ON, do the action, then save) --")
+		if #spyCallLog == 0 then
+			table.insert(lines, "(empty -- enable Spybot first, then perform the action before saving)")
+		else
+			for _, entry in spyCallLog do table.insert(lines, entry) end
+		end
+
 		local data = table.concat(lines, "\n")
 		local ok = pcall(function() writefile("f4xi_spy_snapshot.txt", data) end)
 		if ok then notify("Snapshot saved -> f4xi_spy_snapshot.txt") else notify("writefile unavailable") end
 	end)
+end)
+
+addButton("Utility", "Spybot: Clear Captured Calls", function()
+	spyCallLog = {}
+	notify("Spy call log cleared")
 end)
 
 end -- scope: utility
