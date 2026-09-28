@@ -4,6 +4,20 @@ local TweenService = game:GetService("TweenService")
 
 local DISCORD_LINK = "https://discord.gg/nnXC6MBjPz"
 
+-- Shared diagnostic log: plain print() shows in the in-game Console but is
+-- NOT captured by the Spybot snapshot file (that only records remote calls).
+-- Debug lines from any feature (chest/soul/loot candidate scans, etc.) go
+-- through this instead so they show up in "Save Full Snapshot" too. Global
+-- and defined this early so every scope in the file can reach it.
+F4XI_DEBUG_LOG = {}
+local F4XI_DEBUG_LOG_MAX = 300
+
+function f4xiDebug(msg)
+	print(msg)
+	table.insert(F4XI_DEBUG_LOG, os.date("%X") .. " " .. msg)
+	if #F4XI_DEBUG_LOG > F4XI_DEBUG_LOG_MAX then table.remove(F4XI_DEBUG_LOG, 1) end
+end
+
 do
 	local function _kick(r)
 		pcall(function()
@@ -2869,6 +2883,19 @@ local function isNpcOrMob(obj)
 	return false
 end
 
+-- Permanent map fixtures that also happen to live in Debree with a prompt
+-- (e.g. the spawn-point shrine) but are never actual loot. Excluded by name
+-- since there's nothing else distinguishing them from a real drop.
+local NON_LOOT_NAME_KEYWORDS = {"spawncrystal", "shrine", "spawn point", "setspawn"}
+
+local function looksLikeNonLoot(name)
+	local lower = name:lower()
+	for _, kw in NON_LOOT_NAME_KEYWORDS do
+		if lower:find(kw) then return true end
+	end
+	return false
+end
+
 -- Dropped items are named after the actual item (e.g. "Ore", "Mouth Dagger"),
 -- so there's no keyword to match on. Instead: anything sitting in Debree with
 -- a live ProximityPrompt that isn't an NPC is fair game -- that's the same
@@ -2881,27 +2908,32 @@ local function collectLootDropsNearby(centerPos, range)
 		local debree = workspace:FindFirstChild("Debree")
 		local searchContainer = if debree then debree else workspace
 		for _, obj in searchContainer:GetDescendants() do
-			if (obj:IsA("BasePart") or obj:IsA("Model")) and not isNpcOrMob(obj) then
-				local prompt = obj:IsA("BasePart") and obj:FindFirstChildWhichIsA("ProximityPrompt") or obj:FindFirstChildWhichIsA("ProximityPrompt", true)
-				if prompt and prompt.Enabled then
-					local part = obj
-					if obj:IsA("Model") then part = obj:FindFirstChildWhichIsA("BasePart") end
-					if part and (part.Position - centerPos).Magnitude < range then
-						candidates += 1
-						print("[F4XI-LOOT] Candidate: " .. obj:GetFullName())
-						touchCollect(hrp, part)
-						if not objectStillExists(obj) then
-							picked += 1
-						else
-							print("[F4XI-LOOT] Touch attempted but " .. obj:GetFullName() .. " is still there")
+			-- Each candidate gets its own pcall so one bad/stuck object (like
+			-- the shrine before this fix) can't abort the whole pass and skip
+			-- every candidate that would've come after it.
+			pcall(function()
+				if (obj:IsA("BasePart") or obj:IsA("Model")) and not isNpcOrMob(obj) and not looksLikeNonLoot(obj.Name) then
+					local prompt = obj:IsA("BasePart") and obj:FindFirstChildWhichIsA("ProximityPrompt") or obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+					if prompt and prompt.Enabled then
+						local part = obj
+						if obj:IsA("Model") then part = obj:FindFirstChildWhichIsA("BasePart") end
+						if part and (part.Position - centerPos).Magnitude < range then
+							candidates += 1
+							f4xiDebug("[F4XI-LOOT] Candidate: " .. obj:GetFullName())
+							touchCollect(hrp, part)
+							if not objectStillExists(obj) then
+								picked += 1
+							else
+								f4xiDebug("[F4XI-LOOT] Touch attempted but " .. obj:GetFullName() .. " is still there")
+							end
 						end
 					end
 				end
-			end
+			end)
 		end
 	end)
 	if candidates == 0 then
-		print("[F4XI-LOOT] No loot candidates found this pass")
+		f4xiDebug("[F4XI-LOOT] No loot candidates found this pass")
 	end
 	return picked
 end
@@ -2997,12 +3029,12 @@ local function collectNearbyChests()
 	for _, chest in findChestsBroad() do table.insert(allChests, chest) end
 
 	if #allChests == 0 then
-		print("[F4XI-CHEST] No chest candidates found (workspace.Chests + broad name scan both empty)")
+		f4xiDebug("[F4XI-CHEST] No chest candidates found (workspace.Chests + broad name scan both empty)")
 	else
 		for _, chest in allChests do
 			pcall(function()
 				local dist = math.round((chest.part.Position - savedCF.Position).Magnitude)
-				print("[F4XI-CHEST] Candidate: " .. chest.model:GetFullName() .. " | dist=" .. dist)
+				f4xiDebug("[F4XI-CHEST] Candidate: " .. chest.model:GetFullName() .. " | dist=" .. dist)
 			end)
 		end
 	end
@@ -4498,7 +4530,11 @@ function touchCollect(hrp, part)
 	hrp.CFrame = approachCF
 	task.wait(0.15)
 	pcall(function()
-		local prompt = part:FindFirstChildWhichIsA("ProximityPrompt", true)
+		-- Search the whole model, not just this specific part -- the prompt
+		-- is often on a sibling part inside the same Model, not a descendant
+		-- of whichever part happened to be picked for positioning.
+		local searchRoot = part:FindFirstAncestorOfClass("Model") or part
+		local prompt = searchRoot:FindFirstChildWhichIsA("ProximityPrompt", true)
 		if prompt and prompt.Enabled then
 			-- Souls/loot use a real HoldDuration prompt (the "hold T" the game
 			-- shows) -- without zeroing it, fireproximityprompt only starts the
@@ -4551,12 +4587,12 @@ addToggle("Demon", "Auto Pickup Souls", false, function(on)
 								if obj:IsA("Model") then part = obj:FindFirstChildWhichIsA("BasePart") end
 								if part then
 									candidates += 1
-									print("[F4XI-SOUL] Candidate: " .. obj:GetFullName())
+									f4xiDebug("[F4XI-SOUL] Candidate: " .. obj:GetFullName())
 									touchCollect(hrp, part)
 									if not objectStillExists(obj) then
 										picked += 1
 									else
-										print("[F4XI-SOUL] Touch attempted but " .. obj:GetFullName() .. " is still there")
+										f4xiDebug("[F4XI-SOUL] Touch attempted but " .. obj:GetFullName() .. " is still there")
 									end
 								end
 							end
@@ -4565,7 +4601,7 @@ addToggle("Demon", "Auto Pickup Souls", false, function(on)
 				end
 
 				if candidates == 0 then
-					print("[F4XI-SOUL] No soul candidates found this pass")
+					f4xiDebug("[F4XI-SOUL] No soul candidates found this pass")
 				end
 
 				if picked > 0 then
@@ -5514,6 +5550,14 @@ addButton("Utility", "Spybot: Save Full Snapshot", function()
 			table.insert(lines, "(empty -- enable Spybot first, then perform the action before saving)")
 		else
 			for _, entry in spyCallLog do table.insert(lines, entry) end
+		end
+
+		table.insert(lines, "")
+		table.insert(lines, "-- DEBUG LOG ([F4XI-CHEST]/[F4XI-SOUL]/[F4XI-LOOT] candidate scans) --")
+		if #F4XI_DEBUG_LOG == 0 then
+			table.insert(lines, "(empty -- no Auto Collect Chests/Loot/Souls activity logged yet)")
+		else
+			for _, entry in F4XI_DEBUG_LOG do table.insert(lines, entry) end
 		end
 
 		local data = table.concat(lines, "\n")
