@@ -4773,6 +4773,252 @@ addToggle("Demon", "Debug Remotes (Discovery Mode)", false, function(on)
 end)
 
 addSpacer("Demon")
+addLabel("Demon", "KASUGAI CROW -> MUZAN LOOP")
+
+local CROW_MUZAN_CONFIG = {
+	crowNamePattern = "crow",
+	questSearchRadius = 220,
+}
+
+local function findCrowNPC()
+	local crowModel = nil
+	pcall(function()
+		for _, obj in workspace:GetDescendants() do
+			if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then
+				if obj.Name:lower():find(CROW_MUZAN_CONFIG.crowNamePattern) and obj:FindFirstChild("HumanoidRootPart") then
+					crowModel = obj
+					return
+				end
+			end
+		end
+	end)
+	return crowModel
+end
+
+local function snapshotQuestNames()
+	local names = {}
+	local holder = getQuestHolder()
+	if holder then
+		for _, child in holder:GetChildren() do
+			local qs = child:FindFirstChild("QuestString")
+			if qs then names[qs.Value] = true end
+		end
+	end
+	return names
+end
+
+local function talkToCrowAndAcceptQuest()
+	local hrp = getHRP(); if not hrp then return nil, nil end
+	local crow = findCrowNPC()
+	if not crow then return nil, nil end
+	local cHRP = crow:FindFirstChild("HumanoidRootPart")
+	if not cHRP then return nil, nil end
+
+	hrp.CFrame = cHRP.CFrame + Vector3.new(0, 3, 0)
+	task.wait(0.8)
+
+	local before = snapshotQuestNames()
+	pcall(function()
+		for _, obj in crow:GetDescendants() do
+			if obj:IsA("ProximityPrompt") then fireproximityprompt(obj) end
+		end
+	end)
+	task.wait(0.3)
+	pcall(function() signalRemote:FireServer("NpcTalking", "Ended") end)
+	task.wait(0.6)
+
+	local newQuest = nil
+	local after = snapshotQuestNames()
+	for name in pairs(after) do
+		if not before[name] then newQuest = name; break end
+	end
+	return newQuest, cHRP.Position
+end
+
+local function findNearestHostile(centerPos, radius)
+	local best, bestDist = nil, radius
+	pcall(function()
+		local sources = {workspace:FindFirstChild("Humanoids"), workspace:FindFirstChild("Debree")}
+		for _, source in sources do
+			if source then
+				local regions = source:FindFirstChild("Regions")
+				if regions then
+					for _, region in regions:GetChildren() do
+						local activeNpcs = region:FindFirstChild("ActiveNpcs")
+						if activeNpcs then
+							for _, npcFolder in activeNpcs:GetChildren() do
+								if not npcFolder.Name:lower():find(CROW_MUZAN_CONFIG.crowNamePattern) then
+									for _, child in npcFolder:GetChildren() do
+										if child:IsA("Model") then
+											local hum = child:FindFirstChildOfClass("Humanoid")
+											local root = child:FindFirstChild("HumanoidRootPart")
+											if hum and hum.Health > 0 and root then
+												local d = (root.Position - centerPos).Magnitude
+												if d < bestDist then bestDist = d; best = child end
+											end
+										end
+									end
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end)
+	return best
+end
+
+local function farmHostilesNear(centerPos, radius, isActiveFn)
+	local hrp = getHRP(); if not hrp then return end
+	hrp.CFrame = CFrame.new(centerPos) + Vector3.new(0, 5, 0)
+	task.wait(0.5)
+	comboCounter = 0
+	local lockedMob = nil
+	while isActiveFn() do
+		task.wait(0.25)
+		pcall(function()
+			local myHrp = getHRP()
+			local myHum = getHumanoid()
+			if not myHrp or not myHum or myHum.Health <= 0 then lockedMob = nil; return end
+			if (myHrp.Position - centerPos).Magnitude > radius + 150 then
+				myHrp.CFrame = CFrame.new(centerPos) + Vector3.new(0, 5, 0)
+				lockedMob = nil
+				return
+			end
+			local mobAlive = false
+			if lockedMob then
+				pcall(function()
+					local h = lockedMob:FindFirstChildOfClass("Humanoid")
+					local r = lockedMob:FindFirstChild("HumanoidRootPart")
+					if h and h.Health > 0 and r and lockedMob.Parent then mobAlive = true end
+				end)
+			end
+			if not mobAlive then
+				lockedMob = findNearestHostile(centerPos, radius)
+				if lockedMob then
+					comboCounter = 0
+					local root = lockedMob:FindFirstChild("HumanoidRootPart")
+					if root then
+						myHum.PlatformStand = true
+						myHrp.CFrame = getAttackCFrame(root.Position, myHrp)
+						task.wait()
+						startFarmHold(myHrp, getAttackPosition(root.Position, myHrp), root.Position)
+					end
+				end
+			end
+			if lockedMob then
+				local root = lockedMob:FindFirstChild("HumanoidRootPart")
+				if root then
+					myHum.PlatformStand = true
+					startFarmHold(myHrp, getAttackPosition(root.Position, myHrp), root.Position)
+					fireAttack()
+				end
+			else
+				stopFarmHold()
+				if (myHrp.Position - centerPos).Magnitude > 80 then
+					myHrp.CFrame = CFrame.new(centerPos) + Vector3.new(0, 5, 0)
+				end
+			end
+		end)
+	end
+	stopFarmHold()
+end
+
+local function fightMuzanBoss(isActiveFn)
+	notify("Searching for Muzan...")
+	local muzan = nil
+	while isActiveFn() and not muzan do
+		muzan = findMuzanNPC()
+		if not muzan then
+			local hrp = getHRP()
+			if hrp then hrp.CFrame = CFrame.new(2467, 1079, 2333) + Vector3.new(0, 5, 0) end
+			task.wait(2)
+		end
+	end
+	if not muzan then return false end
+
+	local mHum = muzan:FindFirstChildOfClass("Humanoid")
+	if not mHum then return false end
+
+	pcall(function()
+		local myHrp = getHRP()
+		local root = muzan:FindFirstChild("HumanoidRootPart")
+		if myHrp and root then myHrp.CFrame = getAttackCFrame(root.Position, myHrp) end
+	end)
+	task.wait()
+
+	notify("Engaging Muzan!")
+	comboCounter = 0
+	while isActiveFn() and muzan.Parent and mHum.Health > 0 do
+		task.wait(0.25)
+		pcall(function()
+			local myHrp = getHRP()
+			local myHum = getHumanoid()
+			if not myHrp or not myHum or myHum.Health <= 0 then return end
+			local root = muzan:FindFirstChild("HumanoidRootPart")
+			if not root then return end
+			myHum.PlatformStand = true
+			startFarmHold(myHrp, getAttackPosition(root.Position, myHrp), root.Position)
+			fireAttack()
+		end)
+	end
+	stopFarmHold()
+	return (not muzan.Parent) or mHum.Health <= 0
+end
+
+local crowMuzanLoopEnabled = false
+local crowMuzanLoopId = 0
+
+addToggle("Demon", "Auto Crow -> Kill Mobs -> Kill Muzan (LOOP)", false, function(on)
+	crowMuzanLoopEnabled = on
+	if not on then
+		notify("Crow/Muzan auto loop stopped")
+		return
+	end
+	crowMuzanLoopId = crowMuzanLoopId + 1
+	local myId = crowMuzanLoopId
+	local function active() return crowMuzanLoopEnabled and myId == crowMuzanLoopId end
+
+	task.spawn(function()
+		equipWeapon(autoFarmWeaponSlot)
+		while active() do
+			notify("Looking for Kasugai Crow...")
+			local questName, crowPos = nil, nil
+			for attempt = 1, 30 do
+				if not active() then break end
+				questName, crowPos = talkToCrowAndAcceptQuest()
+				if questName then break end
+				task.wait(1)
+			end
+
+			if not active() then break end
+
+			if not questName then
+				notify("No new quest from Crow -- retrying in 5s")
+				task.wait(5)
+			else
+				notify("Quest accepted: " .. questName .. " -- clearing Muzan's mobs")
+				farmHostilesNear(crowPos, CROW_MUZAN_CONFIG.questSearchRadius, function()
+					return active() and hasQuest(questName)
+				end)
+
+				if active() then
+					notify("Mobs cleared -- heading to Muzan")
+					local killed = fightMuzanBoss(active)
+					if killed then
+						notify("Muzan defeated! Looping back to Crow...")
+					else
+						notify("Lost track of Muzan -- retrying loop")
+					end
+					task.wait(1)
+				end
+			end
+		end
+	end)
+end)
+
+addSpacer("Demon")
 addLabel("Demon", "SPIDER LILY")
 
 addButton("Demon", "TP to Nearest Spider Lily", function()
