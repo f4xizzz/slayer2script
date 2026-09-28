@@ -4736,7 +4736,8 @@ addToggle("Demon", "Debug Remotes (Discovery Mode)", false, function(on)
 			oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
 				local method = getnamecallmethod()
 				if muzanDebugEnabled and (method == "FireServer" or method == "InvokeServer") then
-					pcall(function() dbgPrint("OUT " .. method, self, ...) end)
+					local args = {...}
+					pcall(function() dbgPrint("OUT " .. method, self, table.unpack(args)) end)
 				end
 				return oldNamecall(self, ...)
 			end))
