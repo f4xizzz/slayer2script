@@ -4685,6 +4685,93 @@ addToggle("Demon", "Muzan ESP", false, function(on)
 end)
 
 addSpacer("Demon")
+addLabel("Demon", "DEBUG - FIND MUZAN QUEST CODES")
+
+local muzanDebugEnabled = false
+local muzanDebugNamecallHooked = false
+local muzanDebugSeenNpcFolders = {}
+local muzanDebugConn = nil
+
+local function dbgArgToStr(v)
+	local ok, s = pcall(function()
+		if typeof(v) == "Instance" then return "<" .. v.ClassName .. ":" .. v:GetFullName() .. ">" end
+		if typeof(v) == "table" then
+			local parts = {}
+			for k, val in v do table.insert(parts, tostring(k) .. "=" .. tostring(val)) end
+			return "{" .. table.concat(parts, ", ") .. "}"
+		end
+		return tostring(v)
+	end)
+	return ok and s or "<unprintable>"
+end
+
+local function dbgPrint(tag, ...)
+	local parts = {}
+	for i = 1, select("#", ...) do
+		table.insert(parts, dbgArgToStr((select(i, ...))))
+	end
+	print(("[F4XI-DBG][%s] %s"):format(tag, table.concat(parts, " | ")))
+end
+
+addToggle("Demon", "Debug Remotes (Discovery Mode)", false, function(on)
+	muzanDebugEnabled = on
+	if not on then
+		if muzanDebugConn then muzanDebugConn:Disconnect(); muzanDebugConn = nil end
+		notify("Debug mode OFF")
+		return
+	end
+
+	notify("Debug ON -- open Utility > Console, then go talk to Muzan and accept his quest")
+
+	if signalRemote and not muzanDebugConn then
+		muzanDebugConn = signalRemote.OnClientEvent:Connect(function(...)
+			if muzanDebugEnabled then dbgPrint("IN", ...) end
+		end)
+	end
+
+	pcall(function()
+		if hookmetamethod and newcclosure and not muzanDebugNamecallHooked then
+			muzanDebugNamecallHooked = true
+			local oldNamecall
+			oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+				local method = getnamecallmethod()
+				if muzanDebugEnabled and (method == "FireServer" or method == "InvokeServer") then
+					pcall(function() dbgPrint("OUT " .. method, self, ...) end)
+				end
+				return oldNamecall(self, ...)
+			end))
+		end
+	end)
+
+	task.spawn(function()
+		while muzanDebugEnabled do
+			pcall(function()
+				local sources = {workspace:FindFirstChild("Humanoids"), workspace:FindFirstChild("Debree")}
+				for _, source in sources do
+					if source then
+						local regions = source:FindFirstChild("Regions")
+						if regions then
+							for _, region in regions:GetChildren() do
+								local activeNpcs = region:FindFirstChild("ActiveNpcs")
+								if activeNpcs then
+									for _, npcFolder in activeNpcs:GetChildren() do
+										if not muzanDebugSeenNpcFolders[npcFolder] then
+											muzanDebugSeenNpcFolders[npcFolder] = true
+											dbgPrint("NPC-SPAWN", npcFolder.Name .. " (region: " .. region.Name .. ")")
+										end
+									end
+								end
+							end
+						end
+					end
+				end
+			end)
+			task.wait(1)
+		end
+	end)
+end)
+
+addSpacer("Demon")
 addLabel("Demon", "SPIDER LILY")
 
 addButton("Demon", "TP to Nearest Spider Lily", function()
