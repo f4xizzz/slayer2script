@@ -2942,12 +2942,36 @@ local function findChestsWithPrompts(container)
 	return chests
 end
 
+-- World-event chests (e.g. "Chest Mound") don't necessarily live under
+-- workspace.Chests -- scan everywhere by name as a fallback so those aren't missed.
+local function findChestsBroad()
+	local chests = {}
+	pcall(function()
+		for _, obj in workspace:GetDescendants() do
+			if (obj:IsA("BasePart") or obj:IsA("Model")) and looksLikeChest(obj.Name) and not isNpcOrMob(obj) then
+				local prompt = obj:IsA("BasePart") and obj:FindFirstChildWhichIsA("ProximityPrompt") or obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+				if prompt and prompt.Enabled then
+					local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart")
+					if part then
+						local key = posKey(part.Position)
+						if not openedChestPositions[key] then
+							table.insert(chests, {model = obj, part = part, prompt = prompt, key = key})
+						end
+					end
+				end
+			end
+		end
+	end)
+	return chests
+end
+
 local function collectNearbyChests()
 	local hrp = getHRP(); if not hrp then return end
 	local savedCF = hrp.CFrame
 	local collected = 0
 
 	local allChests = findChestsWithPrompts(workspace:FindFirstChild("Chests"))
+	for _, chest in findChestsBroad() do table.insert(allChests, chest) end
 
 	for _, chest in allChests do
 		if not autoChestEnabled then break end
@@ -5242,12 +5266,35 @@ local spyCallLog = {}
 local SPY_CALL_LOG_MAX = 500
 local D2C = nil
 
+local d2cLoadAttempted = false
+local d2cLoadError = nil
+
 local function loadD2C()
-	if D2C then return D2C end
-	pcall(function()
+	if D2C or d2cLoadAttempted then return D2C end
+	d2cLoadAttempted = true
+	local ok, err = pcall(function()
 		D2C = loadstring(game:HttpGet("https://raw.githubusercontent.com/Awakenchan/GcViewerV2/refs/heads/main/Utility/Data2Code%40Amity.lua"))()
 	end)
+	if not ok then d2cLoadError = err end
 	return D2C
+end
+
+-- Cheap manual fallback (depth-limited) for when Data2Code can't be fetched,
+-- so tables still show their contents instead of just "table: 0x...".
+local function simpleDump(value, depth)
+	depth = depth or 0
+	if depth > 3 then return "..." end
+	if typeof(value) == "table" then
+		local parts = {}
+		for k, v in pairs(value) do
+			table.insert(parts, tostring(k) .. "=" .. simpleDump(v, depth + 1))
+		end
+		return "{" .. table.concat(parts, ", ") .. "}"
+	elseif typeof(value) == "Instance" then
+		local ok, full = pcall(function() return value:GetFullName() end)
+		return "<" .. value.ClassName .. ":" .. (ok and full or value.Name) .. ">"
+	end
+	return tostring(value)
 end
 
 local function spySerialize(value)
@@ -5255,6 +5302,10 @@ local function spySerialize(value)
 	if ok and d2c then
 		local ok2, s = pcall(function() return d2c.Convert(value, true) end)
 		if ok2 then return s end
+	end
+	if typeof(value) == "table" or typeof(value) == "Instance" then
+		local ok3, s = pcall(simpleDump, value)
+		if ok3 then return s end
 	end
 	return tostring(value)
 end
@@ -5305,6 +5356,15 @@ addToggle("Utility", "Spybot (Log Everything)", false, function(on)
 		return
 	end
 	notify("Spybot ON -- open Console to see logs")
+
+	task.spawn(function()
+		local d2c = loadD2C()
+		if d2c then
+			notify("Data2Code loaded -- tables will show full content")
+		else
+			notify("Data2Code failed to load (" .. tostring(d2cLoadError) .. ") -- using basic fallback")
+		end
+	end)
 
 	scanForRemotes(game:GetService("ReplicatedStorage"))
 	scanForRemotes(workspace)
