@@ -2856,16 +2856,23 @@ local function isNpcPrompt(prompt)
 	return false
 end
 
-local LOOT_NAME_KEYWORDS = {"drop", "loot", "pickup", "reward", "orb", "collectible", "soul"}
-
-local function looksLikeLootName(name)
-	local lower = name:lower()
-	for _, kw in LOOT_NAME_KEYWORDS do
-		if lower:find(kw) then return true end
+local function isNpcOrMob(obj)
+	if obj:FindFirstChildOfClass("Humanoid") then return true end
+	if obj:FindFirstChildWhichIsA("Humanoid", true) then return true end
+	local parent = obj.Parent
+	while parent and parent ~= workspace do
+		local pName = parent.Name
+		if pName == "Humanoids" or pName == "StationaryNpcs" or pName == "ActiveNpcs" then return true end
+		if parent:FindFirstChildOfClass("Humanoid") then return true end
+		parent = parent.Parent
 	end
 	return false
 end
 
+-- Dropped items are named after the actual item (e.g. "Ore", "Mouth Dagger"),
+-- so there's no keyword to match on. Instead: anything sitting in Debree with
+-- a live ProximityPrompt that isn't an NPC is fair game -- that's the same
+-- place Souls were confirmed to live via the Spybot capture.
 local function collectLootDropsNearby(centerPos, range)
 	local hrp = getHRP(); if not hrp then return 0 end
 	local picked = 0
@@ -2874,16 +2881,14 @@ local function collectLootDropsNearby(centerPos, range)
 		local debree = workspace:FindFirstChild("Debree")
 		local searchContainer = if debree then debree else workspace
 		for _, obj in searchContainer:GetDescendants() do
-			if obj:IsA("BasePart") or obj:IsA("Model") then
-				local ownName = obj.Parent and obj.Parent.Name or obj.Name
-				if looksLikeLootName(ownName) or looksLikeLootName(obj.Name) then
+			if (obj:IsA("BasePart") or obj:IsA("Model")) and not isNpcOrMob(obj) then
+				local prompt = obj:IsA("BasePart") and obj:FindFirstChildWhichIsA("ProximityPrompt") or obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+				if prompt and prompt.Enabled then
 					local part = obj
 					if obj:IsA("Model") then part = obj:FindFirstChildWhichIsA("BasePart") end
 					if part and (part.Position - centerPos).Magnitude < range then
 						candidates += 1
 						print("[F4XI-LOOT] Candidate: " .. obj:GetFullName())
-						-- touchCollect (Demon tab) approaches from an offset and tries both
-						-- ProximityPrompt and firetouchinterest -- same technique as Spider Lily.
 						touchCollect(hrp, part)
 						if not objectStillExists(obj) then
 							picked += 1
@@ -2899,19 +2904,6 @@ local function collectLootDropsNearby(centerPos, range)
 		print("[F4XI-LOOT] No loot candidates found this pass")
 	end
 	return picked
-end
-
-local function isNpcOrMob(obj)
-	if obj:FindFirstChildOfClass("Humanoid") then return true end
-	if obj:FindFirstChildWhichIsA("Humanoid", true) then return true end
-	local parent = obj.Parent
-	while parent and parent ~= workspace do
-		local pName = parent.Name
-		if pName == "Humanoids" or pName == "StationaryNpcs" or pName == "ActiveNpcs" then return true end
-		if parent:FindFirstChildOfClass("Humanoid") then return true end
-		parent = parent.Parent
-	end
-	return false
 end
 
 local CHEST_NAME_KEYWORDS = {"chest", "crate", "box", "treasure", "reward", "barrel", "supply"}
@@ -2954,11 +2946,32 @@ end
 
 -- World-event chests (e.g. "Chest Mound") don't necessarily live under
 -- workspace.Chests -- scan everywhere by name as a fallback so those aren't missed.
+-- Walking the whole workspace every pass tanked FPS once both Auto Collect
+-- Chests and Auto Collect Loot Drops were on. The list of chest-named
+-- instances barely changes second to second, so only re-walk workspace every
+-- few seconds and re-check the cheap stuff (prompt state, distance, already
+-- opened) fresh every time in between.
+local chestBroadCache = {}
+local chestBroadCacheAt = 0
+local CHEST_BROAD_RESCAN_SECONDS = 6
+
 local function findChestsBroad()
+	if os.clock() - chestBroadCacheAt > CHEST_BROAD_RESCAN_SECONDS then
+		chestBroadCacheAt = os.clock()
+		chestBroadCache = {}
+		pcall(function()
+			for _, obj in workspace:GetDescendants() do
+				if (obj:IsA("BasePart") or obj:IsA("Model")) and looksLikeChest(obj.Name) and not isNpcOrMob(obj) then
+					table.insert(chestBroadCache, obj)
+				end
+			end
+		end)
+	end
+
 	local chests = {}
-	pcall(function()
-		for _, obj in workspace:GetDescendants() do
-			if (obj:IsA("BasePart") or obj:IsA("Model")) and looksLikeChest(obj.Name) and not isNpcOrMob(obj) then
+	for _, obj in chestBroadCache do
+		pcall(function()
+			if obj.Parent then
 				local prompt = obj:IsA("BasePart") and obj:FindFirstChildWhichIsA("ProximityPrompt") or obj:FindFirstChildWhichIsA("ProximityPrompt", true)
 				if prompt and prompt.Enabled then
 					local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart")
@@ -2970,8 +2983,8 @@ local function findChestsBroad()
 					end
 				end
 			end
-		end
-	end)
+		end)
+	end
 	return chests
 end
 
@@ -3001,7 +3014,13 @@ local function collectNearbyChests()
 			openedChestPositions[chest.key] = os.clock()
 			hrp.CFrame = chest.part.CFrame + Vector3.new(0, 3, 0)
 			task.wait(0.3)
-			pcall(function() fireproximityprompt(chest.prompt) end)
+			pcall(function()
+				local originalHold = chest.prompt.HoldDuration
+				chest.prompt.HoldDuration = 0
+				fireproximityprompt(chest.prompt)
+				task.wait(0.05)
+				if chest.prompt.Parent then chest.prompt.HoldDuration = originalHold end
+			end)
 			task.wait(1)
 			collected += 1
 		end
@@ -4480,7 +4499,17 @@ function touchCollect(hrp, part)
 	task.wait(0.15)
 	pcall(function()
 		local prompt = part:FindFirstChildWhichIsA("ProximityPrompt", true)
-		if prompt and prompt.Enabled then pcall(function() fireproximityprompt(prompt) end) end
+		if prompt and prompt.Enabled then
+			-- Souls/loot use a real HoldDuration prompt (the "hold T" the game
+			-- shows) -- without zeroing it, fireproximityprompt only starts the
+			-- hold and never completes it, so nothing actually gets collected
+			-- and the same object gets retried forever on every pass.
+			local originalHold = prompt.HoldDuration
+			pcall(function() prompt.HoldDuration = 0 end)
+			pcall(function() fireproximityprompt(prompt) end)
+			task.wait(0.05)
+			pcall(function() if prompt and prompt.Parent then prompt.HoldDuration = originalHold end end)
+		end
 	end)
 	pcall(function()
 		if firetouchinterest then
