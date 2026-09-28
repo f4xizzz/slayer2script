@@ -2841,24 +2841,46 @@ local function isNpcPrompt(prompt)
 	return false
 end
 
+local LOOT_NAME_KEYWORDS = {"drop", "loot", "pickup", "reward", "orb", "collectible", "soul"}
+
+local function looksLikeLootName(name)
+	local lower = name:lower()
+	for _, kw in LOOT_NAME_KEYWORDS do
+		if lower:find(kw) then return true end
+	end
+	return false
+end
+
 local function collectLootDropsNearby(centerPos, range)
 	local hrp = getHRP(); if not hrp then return 0 end
 	local picked = 0
 	pcall(function()
 		local debree = workspace:FindFirstChild("Debree")
 		local searchContainer = if debree then debree else workspace
-		for _, prompt in searchContainer:GetDescendants() do
-			if prompt:IsA("ProximityPrompt") and prompt.Enabled and not isNpcPrompt(prompt) then
-				local part = prompt.Parent
-				if not part or not part:IsA("BasePart") then
-					part = prompt.Parent and prompt.Parent:FindFirstChildWhichIsA("BasePart")
-				end
-				if part and (part.Position - centerPos).Magnitude < range then
-					local name = (part.Parent and part.Parent.Name or part.Name):lower()
-					if name:find("drop") or name:find("loot") or name:find("pickup") or name:find("reward") or name:find("orb") or name:find("collectible") then
+		for _, obj in searchContainer:GetDescendants() do
+			if obj:IsA("BasePart") or obj:IsA("Model") then
+				local ownName = obj.Parent and obj.Parent.Name or obj.Name
+				if looksLikeLootName(ownName) or looksLikeLootName(obj.Name) then
+					local part = obj
+					if obj:IsA("Model") then part = obj:FindFirstChildWhichIsA("BasePart") end
+					if part and (part.Position - centerPos).Magnitude < range then
 						hrp.CFrame = part.CFrame + Vector3.new(0, 1, 0)
 						task.wait(0.15)
-						pcall(function() fireproximityprompt(prompt) end)
+						-- Some drops use a ProximityPrompt, others are collected by touch
+						-- (same as Spider Lily) -- try both so either style works.
+						pcall(function()
+							local prompt = part:FindFirstChildWhichIsA("ProximityPrompt", true)
+							if prompt and prompt.Enabled and not isNpcPrompt(prompt) then
+								fireproximityprompt(prompt)
+							end
+						end)
+						pcall(function()
+							if firetouchinterest then
+								firetouchinterest(hrp, part, 0)
+								task.wait(0.1)
+								firetouchinterest(hrp, part, 1)
+							end
+						end)
 						picked += 1
 						task.wait(0.15)
 					end
@@ -4398,6 +4420,24 @@ addLabel("Demon", "SOUL COLLECTION")
 
 local autoSoulEnabled = false
 
+-- Souls (e.g. "Brave Soul") have no ProximityPrompt -- the Spybot showed only a
+-- server->client SoulHandler effect (Spawn/Idle/Disappear), no FireServer call.
+-- They're collected by touch, same as Spider Lily elsewhere in this script, so
+-- we walk onto the part and simulate a touch instead of firing a prompt.
+local function touchCollect(hrp, part)
+	pcall(function()
+		local prompt = part:FindFirstChildWhichIsA("ProximityPrompt", true)
+		if prompt and prompt.Enabled then pcall(function() fireproximityprompt(prompt) end) end
+	end)
+	pcall(function()
+		if firetouchinterest then
+			firetouchinterest(hrp, part, 0)
+			task.wait(0.1)
+			firetouchinterest(hrp, part, 1)
+		end
+	end)
+end
+
 addToggle("Demon", "Auto Pickup Souls", false, function(on)
 	autoSoulEnabled = on
 	if not on then return end
@@ -4412,14 +4452,15 @@ addToggle("Demon", "Auto Pickup Souls", false, function(on)
 				for _, obj in container:GetDescendants() do
 					if not autoSoulEnabled then break end
 					pcall(function()
-						if obj:IsA("ProximityPrompt") and obj.Enabled then
-							local n = (obj.Parent and obj.Parent.Name or ""):lower()
+						if obj:IsA("BasePart") or obj:IsA("Model") then
+							local n = obj.Name:lower()
 							if n:find("soul") or n:find("orb") then
-								local part = obj.Parent
-								if part and part:IsA("BasePart") then
+								local part = obj
+								if obj:IsA("Model") then part = obj:FindFirstChildWhichIsA("BasePart") end
+								if part then
 									hrp.CFrame = part.CFrame + Vector3.new(0, 1, 0)
 									task.wait(0.15)
-									fireproximityprompt(obj)
+									touchCollect(hrp, part)
 									picked += 1
 									task.wait(0.15)
 								end
